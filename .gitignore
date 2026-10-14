@@ -1,0 +1,32 @@
+.gradle/
+build/
+out/
+
+### IntelliJ IDEA ###
+.idea/
+*.iml
+*.iws
+*.ipr
+
+### Kotlin ###
+.kotlin/
+
+# Outras IDEs (Eclipse, NetBeans, VS Code)
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+.vscode/
+
+# Arquivos de Sistema
+.DS_Store
+Thumbs.db
