@@ -10,15 +10,23 @@ import com.serie.app.data.SeedData
 import com.serie.app.data.SerieRepository
 import com.serie.app.domain.ActiveSession
 import com.serie.app.domain.ActiveWorkout
+import com.serie.app.domain.CompletedSession
+import com.serie.app.domain.CompletedSet
+import com.serie.app.domain.DateFormat
+import com.serie.app.domain.EvolutionPeriod
+import com.serie.app.domain.ExerciseProgress
+import com.serie.app.domain.MuscleVolume
 import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.PersonalRecord
 import com.serie.app.domain.Preferences
 import com.serie.app.domain.SetEntry
+import com.serie.app.domain.Stats
 import com.serie.app.domain.UserProfile
 import com.serie.app.domain.Workout
 import com.serie.app.domain.WorkoutExercise
 import com.serie.app.domain.WorkoutSummary
+import com.serie.app.domain.WeekDay
 import com.serie.app.domain.WorkoutType
 import com.serie.app.domain.toView
 import kotlinx.coroutines.delay
@@ -34,6 +42,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /** Duracao padrao do descanso entre series, em segundos. */
 private const val REST_DEFAULT = 90
@@ -55,18 +64,48 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
     /** A parte do estado que nao e persistida. */
     private val transient = MutableStateFlow(TransientState())
 
+    // Seis fontes nao cabem num combine so (as sobrecargas vao ate cinco),
+    // entao as sessoes entram por um segundo bloco.
+    private val sessionData = combine(
+        repository.activeSession,
+        repository.history,
+    ) { active, history -> active to history }
+
     private val persisted = combine(
         repository.workouts,
         repository.library,
         repository.preferences,
-        repository.activeSession,
         repository.profile,
-    ) { workouts, library, preferences, session, profile ->
-        PersistedState(workouts, library, preferences ?: SeedData.preferences, session, profile)
+        sessionData,
+    ) { workouts, library, preferences, profile, sessions ->
+        PersistedState(
+            workouts = workouts,
+            library = library,
+            preferences = preferences ?: SeedData.preferences,
+            session = sessions.first,
+            profile = profile,
+            history = sessions.second,
+        )
     }
 
     val state: StateFlow<SerieUiState> = combine(persisted, transient) { db, ui ->
+        val today = LocalDate.now()
+        val history = db.history
         SerieUiState(
+            today = today,
+            todayLabel = DateFormat.longDate(today),
+            history = history,
+            week = Stats.week(history, db.workouts, today),
+            streak = Stats.streakDays(history, today),
+            weekVolume = Stats.formatVolume(Stats.weekVolumeKg(history, today)),
+            sessionsThisWeek = Stats.sessionsThisWeek(history, today),
+            monthDelta = Stats.monthDelta(history, today),
+            lastRecord = Stats.lastRecord(history),
+            totalWorkouts = Stats.totalWorkouts(history),
+            totalRecords = Stats.totalRecords(history),
+            volumeChart = Stats.volumeChart(history, ui.period, today),
+            muscleVolumes = Stats.muscleVolumes(history),
+            exerciseProgressList = Stats.exerciseProgress(history),
             workouts = db.workouts,
             library = db.library,
             preferences = db.preferences,
@@ -320,17 +359,34 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             if (existing != null) return@launch
 
             val workout = state.value.workouts.firstOrNull { it.id == workoutId } ?: return@launch
-            val index = if (workout.exercises.size > 1) 1 else 0
+            val index = 0
             val exercise = workout.exercises.getOrNull(index)
+
+            // "Anterior" vem do ultimo treino que registrou este exercicio.
+            // Antes vinha de valores fixos do prototipo, o que mostrava uma
+            // carga que o usuario nunca levantou.
+            val lastSets = repository.history.first()
+                .filter { session -> session.sets.any { it.exerciseId == exercise?.exerciseId } }
+                .maxByOrNull { it.startedAtMillis }
+                ?.sets
+                ?.filter { it.exerciseId == exercise?.exerciseId }
+                .orEmpty()
+
             val sets = exercise?.let { ex ->
+                val defaultLoad = ex.load.filter { it.isDigit() || it == ',' }.ifBlank { "0" }
+                val defaultReps = ex.reps.takeWhile { it.isDigit() }.ifBlank { "0" }
                 List(ex.sets) { i ->
-                    val seed = SeedData.activeSets.getOrNull(i)
+                    val previous = lastSets.getOrNull(i)
                     SetEntry(
-                        previous = seed?.first ?: "—",
-                        load = seed?.second
-                            ?: ex.load.filter { it.isDigit() || it == ',' }.ifBlank { "0" },
-                        reps = seed?.third ?: ex.reps.takeWhile { it.isDigit() }.ifBlank { "0" },
-                        done = i < 2,
+                        previous = previous
+                            ?.let { Stats.formatKg(it.loadKg) + " × " + it.reps }
+                            ?: "—",
+                        load = previous?.let { Stats.formatKg(it.loadKg).removeSuffix(" kg") }
+                            ?: defaultLoad,
+                        reps = previous?.reps?.toString() ?: defaultReps,
+                        // Nenhuma serie nasce fechada: o app gravaria no
+                        // historico series que o usuario nao fez.
+                        done = false,
                     )
                 }
             } ?: emptyList()
@@ -344,7 +400,8 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
                     exerciseCount = workout.exercises.size,
                     exerciseName = exercise?.name ?: workout.name,
                     goal = exercise?.let { ex ->
-                        "Meta ${ex.sets} × ${ex.reps} · última vez ${sets.firstOrNull()?.previous ?: "—"}"
+                        val last = sets.firstOrNull()?.previous ?: "—"
+                        "Meta ${ex.sets} × ${ex.reps} · última vez $last"
                     } ?: "",
                     sets = sets,
                     startedAtMillis = System.currentTimeMillis(),
@@ -407,36 +464,92 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
         }
     }
 
-    /** Encerra o treino e monta o resumo a partir do que foi registrado. */
+    /**
+     * Encerra o treino: grava no historico e monta o resumo.
+     *
+     * O grupo muscular de cada serie e copiado da biblioteca no momento da
+     * gravacao em vez de ficar como referencia: se o exercicio for removido
+     * depois, o historico precisa continuar contando para o volume daquele
+     * grupo.
+     */
     fun finishWorkout() {
         viewModelScope.launch {
             val session = repository.activeSession.first() ?: return@launch
-            val doneSets = session.sets.count { it.done }
-            val volume = session.sets.filter { it.done }.sumOf { set ->
-                val load = set.load.replace(',', '.').toDoubleOrNull() ?: 0.0
-                val reps = set.reps.toIntOrNull() ?: 0
-                (load * reps).toInt()
-            }
-            val elapsed = session.elapsedSecondsAt(System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            val snapshot = state.value
 
+            val workout = snapshot.workouts.firstOrNull { it.id == session.workoutId }
+            val exercise = workout?.exercises?.getOrNull(session.exerciseIndex)
+            val libraryEntry = snapshot.library.firstOrNull { it.id == exercise?.exerciseId }
+
+            val completedSets = session.sets.filter { it.done }.mapNotNull { set ->
+                val load = set.load.replace(',', '.').toDoubleOrNull() ?: return@mapNotNull null
+                val reps = set.reps.toIntOrNull() ?: return@mapNotNull null
+                CompletedSet(
+                    exerciseId = exercise?.exerciseId ?: session.workoutId,
+                    exerciseName = session.exerciseName,
+                    muscleGroup = libraryEntry?.group ?: MuscleGroup.Peito,
+                    loadKg = load,
+                    reps = reps,
+                )
+            }
+
+            val completed = CompletedSession(
+                id = "s-" + now,
+                workoutId = session.workoutId,
+                workoutLetter = session.workoutLetter,
+                workoutName = session.workoutName,
+                startedAtMillis = session.startedAtMillis,
+                finishedAtMillis = now,
+                effort = transient.value.effort,
+                sets = completedSets,
+            )
+
+            val previousHistory = repository.history.first()
+            val records = Stats.recordsOf(completed, previousHistory)
+            val lastSame = previousHistory
+                .filter { it.workoutId == completed.workoutId }
+                .maxByOrNull { it.startedAtMillis }
+            val delta = if (lastSame == null || lastSame.volumeKg <= 0.0) {
+                "volume · primeiro registro"
+            } else {
+                val pct = ((completed.volumeKg - lastSame.volumeKg) / lastSame.volumeKg * 100).toInt()
+                val sign = if (pct >= 0) "+" else ""
+                "volume · " + sign + pct + "%"
+            }
+
+            repository.saveCompletedSession(completed)
             repository.clearActiveSession()
+
             transient.update {
                 it.copy(
                     summary = WorkoutSummary(
-                        workoutName = session.workoutName,
-                        dateLabel = SeedData.TODAY_LABEL.substringBefore(",") + ", 14 out",
-                        durationLabel = formatClock(elapsed),
-                        volumeKg = volume,
-                        volumeDelta = "volume · +8%",
-                        totalSets = doneSets,
-                        records = SeedData.finishedRecords,
+                        sessionId = completed.id,
+                        workoutName = completed.workoutName,
+                        dateLabel = DateFormat.shortDate(completed.date),
+                        timeRange = DateFormat.timeRange(
+                            completed.startedAtMillis,
+                            completed.finishedAtMillis,
+                        ),
+                        durationLabel = formatClock(completed.durationSeconds),
+                        volumeKg = completed.volumeKg.toInt(),
+                        volumeDelta = delta,
+                        totalSets = completed.totalSets,
+                        records = records,
                     ),
                 )
             }
         }
     }
 
-    fun setEffort(index: Int) = transient.update { it.copy(effort = index) }
+    /** O esforco e escolhido depois da sessao gravada, entao atualiza o registro. */
+    fun setEffort(index: Int) {
+        val sessionId = transient.value.summary?.sessionId
+        transient.update { it.copy(effort = index) }
+        if (sessionId != null) {
+            viewModelScope.launch { repository.updateSessionEffort(sessionId, index) }
+        }
+    }
 
     fun clearSummary() = transient.update { it.copy(summary = null, effort = 1) }
 
@@ -444,8 +557,9 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
 
     fun setPeriod(index: Int) = transient.update { it.copy(period = index) }
 
+    /** Cicla entre os exercicios com progressao registrada. */
     fun nextProgressExercise() = transient.update {
-        it.copy(progressExercise = (it.progressExercise + 1) % SeedData.exerciseProgress.size)
+        it.copy(progressExercise = it.progressExercise + 1)
     }
 
     // ------------------------------------------------------------------ perfil
@@ -508,6 +622,7 @@ private data class PersistedState(
     val preferences: Preferences,
     val session: ActiveSession?,
     val profile: UserProfile,
+    val history: List<CompletedSession>,
 )
 
 /** A parte do estado que vive so enquanto a tela esta aberta. */
@@ -550,6 +665,28 @@ data class SerieUiState(
     val preferences: Preferences = SeedData.preferences,
     val profile: UserProfile = SeedData.profile,
     val editingProfile: Boolean = false,
+    // ---- derivados do historico ----
+    val today: LocalDate = LocalDate.now(),
+    val todayLabel: String = "",
+    val history: List<CompletedSession> = emptyList(),
+    val week: List<WeekDay> = emptyList(),
+    val streak: Int = 0,
+    val weekVolume: String = "0 kg",
+    val sessionsThisWeek: Int = 0,
+    val monthDelta: String = "-",
+    val lastRecord: PersonalRecord? = null,
+    val totalWorkouts: Int = 0,
+    val totalRecords: Int = 0,
+    val volumeChart: EvolutionPeriod? = null,
+    val muscleVolumes: List<MuscleVolume> = emptyList(),
+    val exerciseProgressList: List<ExerciseProgress> = emptyList(),
 ) {
-    val records: List<PersonalRecord> get() = SeedData.finishedRecords
+    /** Abaixo do minimo, a evolucao mostra "poucos dados" em vez de graficos vazios. */
+    val hasEnoughHistory: Boolean
+        get() = history.size >= Stats.MIN_SESSIONS_FOR_CHARTS
+
+    /** O exercicio em foco no card de progressao, se houver algum. */
+    val progress: ExerciseProgress?
+        get() = if (exerciseProgressList.isEmpty()) null
+        else exerciseProgressList[progressExercise % exerciseProgressList.size]
 }

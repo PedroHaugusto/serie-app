@@ -7,6 +7,10 @@ import com.serie.app.data.local.LibraryDao
 import com.serie.app.data.local.LibraryExerciseEntity
 import com.serie.app.data.local.PreferencesDao
 import com.serie.app.data.local.ProfileDao
+import com.serie.app.data.local.SessionDao
+import com.serie.app.data.local.SessionEntity
+import com.serie.app.data.local.SessionSetEntity
+import com.serie.app.data.local.SessionWithSets
 import com.serie.app.data.local.ProfileEntity
 import com.serie.app.data.local.PreferencesEntity
 import com.serie.app.data.local.SerieDatabase
@@ -15,6 +19,8 @@ import com.serie.app.data.local.WorkoutEntity
 import com.serie.app.data.local.WorkoutExerciseEntity
 import com.serie.app.data.local.WorkoutWithExercises
 import com.serie.app.domain.ActiveSession
+import com.serie.app.domain.CompletedSession
+import com.serie.app.domain.CompletedSet
 import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.Preferences
@@ -39,6 +45,7 @@ class SerieRepository(
     private val preferencesDao: PreferencesDao,
     private val activeSessionDao: ActiveSessionDao,
     private val profileDao: ProfileDao,
+    private val sessionDao: SessionDao,
 ) {
 
     constructor(database: SerieDatabase) : this(
@@ -47,6 +54,7 @@ class SerieRepository(
         database.preferencesDao(),
         database.activeSessionDao(),
         database.profileDao(),
+        database.sessionDao(),
     )
 
     val workouts: Flow<List<Workout>> =
@@ -86,6 +94,19 @@ class SerieRepository(
         ) { session, sets ->
             session?.toDomain(sets.sortedBy { it.position }.map { it.toDomain() })
         }
+
+    /** O historico de treinos concluidos, do mais recente para o mais antigo. */
+    val history: Flow<List<CompletedSession>> =
+        sessionDao.observeAll().map { rows -> rows.map { it.toDomain() } }
+
+    suspend fun saveCompletedSession(session: CompletedSession) =
+        sessionDao.save(
+            session = session.toEntity(),
+            sets = session.sets.map { it.toEntity(session.id) },
+        )
+
+    suspend fun updateSessionEffort(id: String, effort: Int) =
+        sessionDao.updateEffort(id, effort)
 
     suspend fun saveActiveSession(session: ActiveSession) =
         activeSessionDao.save(
@@ -250,6 +271,45 @@ private fun ActiveSession.toEntity() = ActiveSessionEntity(
     startedAtMillis = startedAtMillis,
     restEndsAtMillis = restEndsAtMillis,
     restRemainingSeconds = restRemainingSeconds,
+)
+
+private fun SessionWithSets.toDomain() = CompletedSession(
+    id = session.id,
+    workoutId = session.workoutId,
+    workoutLetter = session.workoutLetter,
+    workoutName = session.workoutName,
+    startedAtMillis = session.startedAtMillis,
+    finishedAtMillis = session.finishedAtMillis,
+    effort = session.effort,
+    sets = sets.map { it.toDomain() },
+)
+
+private fun CompletedSession.toEntity() = SessionEntity(
+    id = id,
+    workoutId = workoutId,
+    workoutLetter = workoutLetter,
+    workoutName = workoutName,
+    startedAtMillis = startedAtMillis,
+    finishedAtMillis = finishedAtMillis,
+    effort = effort,
+)
+
+private fun SessionSetEntity.toDomain() = CompletedSet(
+    exerciseId = exerciseId,
+    exerciseName = exerciseName,
+    muscleGroup = runCatching { MuscleGroup.valueOf(muscleGroup) }
+        .getOrDefault(MuscleGroup.Peito),
+    loadKg = loadKg,
+    reps = reps,
+)
+
+private fun CompletedSet.toEntity(sessionId: String) = SessionSetEntity(
+    sessionId = sessionId,
+    exerciseId = exerciseId,
+    exerciseName = exerciseName,
+    muscleGroup = muscleGroup.name,
+    loadKg = loadKg,
+    reps = reps,
 )
 
 private fun ActiveSetEntity.toDomain() = SetEntry(

@@ -148,3 +148,30 @@ interface ProfileDao {
     @Upsert
     suspend fun upsert(profile: ProfileEntity)
 }
+
+@Dao
+interface SessionDao {
+
+    @Transaction
+    @Query("SELECT * FROM sessions ORDER BY startedAtMillis DESC")
+    fun observeAll(): Flow<List<SessionWithSets>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSession(session: SessionEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSets(sets: List<SessionSetEntity>)
+
+    /** O esforco e escolhido na tela de resumo, depois da sessao ja gravada. */
+    @Query("UPDATE sessions SET effort = :effort WHERE id = :id")
+    suspend fun updateEffort(id: String, effort: Int)
+
+    @Query("DELETE FROM sessions WHERE id = :id")
+    suspend fun delete(id: String)
+
+    @Transaction
+    suspend fun save(session: SessionEntity, sets: List<SessionSetEntity>) {
+        insertSession(session)
+        insertSets(sets)
+    }
+}

@@ -164,8 +164,11 @@ data class PersonalRecord(
 /** O resultado de um treino concluido, exibido no resumo. */
 @Immutable
 data class WorkoutSummary(
+    /** Id da sessao ja gravada no historico, para atualizar o esforco depois. */
+    val sessionId: String,
     val workoutName: String,
     val dateLabel: String,
+    val timeRange: String,
     val durationLabel: String,
     val volumeKg: Int,
     val volumeDelta: String,
@@ -253,3 +256,47 @@ data class Preferences(
 
 /** Estado de carregamento de uma tela de lista. */
 enum class LoadState { Content, Empty, Loading, Error }
+
+/** Uma serie registrada num treino concluido. */
+@Immutable
+data class CompletedSet(
+    val exerciseId: String,
+    val exerciseName: String,
+    val muscleGroup: MuscleGroup,
+    val loadKg: Double,
+    val reps: Int,
+) {
+    /** Volume da serie: carga vezes repeticoes. */
+    val volumeKg: Double get() = loadKg * reps
+
+    /**
+     * 1RM estimado pela formula de Epley.
+     *
+     * Serve para comparar series de reps diferentes na mesma escala - sem
+     * isso, 70 kg x 10 e 90 kg x 3 nao teriam como ser ordenados.
+     */
+    val estimated1RM: Double get() = if (reps <= 1) loadKg else loadKg * (1 + reps / 30.0)
+}
+
+/** Um treino concluido, como ele fica no historico. */
+@Immutable
+data class CompletedSession(
+    val id: String,
+    val workoutId: String,
+    val workoutLetter: String,
+    val workoutName: String,
+    val startedAtMillis: Long,
+    val finishedAtMillis: Long,
+    /** Esforco percebido: 0 leve, 1 ideal, 2 pesado. */
+    val effort: Int,
+    val sets: List<CompletedSet>,
+) {
+    val durationSeconds: Int
+        get() = ((finishedAtMillis - startedAtMillis) / 1000).coerceAtLeast(0).toInt()
+
+    val totalSets: Int get() = sets.size
+
+    val volumeKg: Double get() = sets.sumOf { it.volumeKg }
+
+    val date: java.time.LocalDate get() = DateFormat.dateOf(startedAtMillis)
+}

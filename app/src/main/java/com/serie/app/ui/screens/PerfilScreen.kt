@@ -91,11 +91,11 @@ fun PerfilScreen(
         item {
             SerieCard(padding = Dimens.cardPaddingTight) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    ProfileStat("${profile.workouts}", "treinos", Modifier.weight(1f))
+                    ProfileStat("${state.totalWorkouts}", "treinos", Modifier.weight(1f))
                     VerticalHairline(height = 40.dp)
-                    ProfileStat("${profile.streak}", "dias seguidos", Modifier.weight(1f))
+                    ProfileStat("${state.streak}", "dias seguidos", Modifier.weight(1f))
                     VerticalHairline(height = 40.dp)
-                    ProfileStat("${profile.records}", "recordes", Modifier.weight(1f))
+                    ProfileStat("${state.totalRecords}", "recordes", Modifier.weight(1f))
                 }
             }
         }

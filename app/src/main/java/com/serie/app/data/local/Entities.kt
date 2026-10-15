@@ -151,3 +151,51 @@ data class ProfileEntity(
         const val SINGLE_ROW = 1
     }
 }
+
+/** Um treino concluido. */
+@Entity(tableName = "sessions", indices = [Index("startedAtMillis")])
+data class SessionEntity(
+    @PrimaryKey val id: String,
+    val workoutId: String,
+    val workoutLetter: String,
+    val workoutName: String,
+    val startedAtMillis: Long,
+    val finishedAtMillis: Long,
+    val effort: Int,
+)
+
+/**
+ * As series daquele treino.
+ *
+ * Guardar serie a serie, e nao so o total, e o que permite derivar depois
+ * volume por grupo muscular e progressao de carga por exercicio. Um campo
+ * "volume total" economizaria espaco e fecharia a porta para as duas coisas.
+ */
+@Entity(
+    tableName = "session_sets",
+    foreignKeys = [
+        ForeignKey(
+            entity = SessionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["sessionId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("sessionId"), Index("exerciseId")],
+)
+data class SessionSetEntity(
+    @PrimaryKey(autoGenerate = true) val uid: Long = 0,
+    val sessionId: String,
+    val exerciseId: String,
+    val exerciseName: String,
+    val muscleGroup: String,
+    val loadKg: Double,
+    val reps: Int,
+)
+
+/** Uma sessao com suas series. */
+data class SessionWithSets(
+    @Embedded val session: SessionEntity,
+    @Relation(parentColumn = "id", entityColumn = "sessionId")
+    val sets: List<SessionSetEntity>,
+)

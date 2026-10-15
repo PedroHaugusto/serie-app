@@ -61,7 +61,7 @@ fun ResumoScreen(
                 Text("TREINO CONCLUÍDO", style = Nocturne.type.kicker, color = c.accentRamp.s300)
                 Text(summary.workoutName, style = Nocturne.type.h1, color = c.text)
                 Text(
-                    "${summary.dateLabel} · 18:42 – 19:36",
+                    "${summary.dateLabel} · ${summary.timeRange}",
                     style = Nocturne.type.caption,
                     color = c.textMuted,
                 )

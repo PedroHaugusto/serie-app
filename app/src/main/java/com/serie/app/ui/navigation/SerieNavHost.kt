@@ -121,6 +121,11 @@ fun SerieNavHost(
                         state = state,
                         viewModel = viewModel,
                         onOpenBody = { navController.navigate(Routes.CORPO) },
+                        onStartWorkout = {
+                            navController.navigate(Routes.HOJE) {
+                                popUpTo(Routes.HOJE) { inclusive = true }
+                            }
+                        },
                     )
                 }
 

@@ -67,7 +67,7 @@ fun HojeScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(SeedData.TODAY_LABEL, style = Nocturne.type.label, color = c.textMuted)
+                    Text(state.todayLabel, style = Nocturne.type.label, color = c.textMuted)
                     // Primeiro nome do perfil: com o nome editavel, uma
                     // saudacao fixa passaria a chamar o usuario de outra pessoa.
                     Text(
@@ -147,12 +147,15 @@ fun HojeScreen(
 
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionLabel("Esta semana", trailing = SeedData.WEEK_PROGRESS)
+                SectionLabel(
+                    "Esta semana",
+                    trailing = "${state.sessionsThisWeek} de ${state.preferences.weeklyGoal} treinos",
+                )
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    SeedData.week.forEach { day ->
+                    state.week.forEach { day ->
                         WeekDayCell(day, Modifier.weight(1f))
                     }
                 }
@@ -168,7 +171,7 @@ fun HojeScreen(
                 ) {
                     StatTile(
                         icon = Ph.flame,
-                        value = SeedData.STREAK_DAYS,
+                        value = state.streak.toString(),
                         caption = "dias seguidos",
                         filled = true,
                         modifier = Modifier.weight(1f),
@@ -176,14 +179,14 @@ fun HojeScreen(
                     VerticalHairline()
                     StatTile(
                         icon = Ph.stack,
-                        value = SeedData.WEEK_VOLUME,
+                        value = state.weekVolume,
                         caption = "volume semana",
                         modifier = Modifier.weight(1f),
                     )
                     VerticalHairline()
                     StatTile(
                         icon = Ph.trendUp,
-                        value = SeedData.MONTH_DELTA,
+                        value = state.monthDelta,
                         caption = "vs. mês passado",
                         modifier = Modifier.weight(1f),
                     )
@@ -191,37 +194,41 @@ fun HojeScreen(
             }
         }
 
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(Radius.lg)
-                    .background(c.accentRamp.s900)
-                    .clickable(onClick = onOpenRecords)
-                    .padding(Dimens.cardPaddingTight),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(
-                    Modifier
-                        .size(36.dp)
-                        .clip(Radius.md)
-                        .background(c.accentRamp.s800),
-                    contentAlignment = Alignment.Center,
-                ) { PhIcon(Ph.trophy, size = 18.dp, tint = c.accent, filled = true) }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        SeedData.lastRecord.exerciseName,
-                        style = Nocturne.type.itemTitle,
-                        color = c.text,
-                    )
-                    Text(
-                        SeedData.lastRecord.detail,
-                        style = Nocturne.type.caption,
-                        color = c.textSecondary,
-                    )
+        // Sem recorde no historico, o card simplesmente nao existe: um card
+        // vazio sugeriria que o usuario tem um recorde e nao bateu.
+        state.lastRecord?.let { record ->
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(Radius.lg)
+                        .background(c.accentRamp.s900)
+                        .clickable(onClick = onOpenRecords)
+                        .padding(Dimens.cardPaddingTight),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(Radius.md)
+                            .background(c.accentRamp.s800),
+                        contentAlignment = Alignment.Center,
+                    ) { PhIcon(Ph.trophy, size = 18.dp, tint = c.accent, filled = true) }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            record.exerciseName,
+                            style = Nocturne.type.itemTitle,
+                            color = c.text,
+                        )
+                        Text(
+                            record.detail,
+                            style = Nocturne.type.caption,
+                            color = c.textSecondary,
+                        )
+                    }
+                    PhIcon(Ph.caretRight, size = 16.dp, tint = c.textMuted)
                 }
-                PhIcon(Ph.caretRight, size = 16.dp, tint = c.textMuted)
             }
         }
     }

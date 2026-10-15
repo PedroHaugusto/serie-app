@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.serie.app.ui.theme.Dimens
 import com.serie.app.ui.theme.Nocturne
@@ -110,7 +111,15 @@ fun StatTile(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         PhIcon(icon, size = 18.dp, tint = tint, filled = filled)
-        Text(value, style = Nocturne.type.h2, color = c.text)
+        // Uma linha so: a casa foi dimensionada para "+14%", e um valor longo
+        // quebrando em duas linhas desalinha a fileira inteira de metricas.
+        Text(
+            value,
+            style = Nocturne.type.h2,
+            color = c.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Text(
             caption,
             style = Nocturne.type.caption,

@@ -92,84 +92,11 @@ object SeedData {
     /** O treino de hoje no prototipo e o B. */
     const val TODAY_WORKOUT_ID = "w-b"
 
-    val week: List<WeekDay> = listOf(
-        WeekDay("S", DayState.Done),
-        WeekDay("T", DayState.Rest),
-        WeekDay("Q", DayState.Done),
-        WeekDay("Q", DayState.Done),
-        WeekDay("S", DayState.Today, "B"),
-        WeekDay("S", DayState.Planned, "D"),
-        WeekDay("D", DayState.Rest),
-    )
-
-    const val TODAY_LABEL = "Quarta, 14 de outubro"
-    const val WEEK_PROGRESS = "3 de 5 treinos"
-
-    const val STREAK_DAYS = "12"
-    const val WEEK_VOLUME = "18,4 t"
-    const val MONTH_DELTA = "+14%"
-
-    val lastRecord = PersonalRecord("Supino reto · 82,5 kg", "Novo recorde na segunda · +2,5 kg")
-
     val readyPrograms = listOf(
         "Push / Pull / Legs" to "6× semana",
         "ABC clássico" to "3–6× semana",
         "Full body" to "3× semana",
     )
-
-    val periods: List<EvolutionPeriod> = listOf(
-        EvolutionPeriod(
-            "4 sem", "18,4 t", "+6% vs. anterior", listOf("seg", "qua", "sex", "dom"),
-            listOf(40, 0, 62, 55, 0, 70, 0, 58, 0, 66, 72, 90),
-        ),
-        EvolutionPeriod(
-            "3 meses", "72,6 t", "+14% vs. anterior", listOf("jul", "ago", "set", "out"),
-            listOf(42, 50, 38, 56, 60, 48, 66, 70, 64, 78, 84, 96),
-        ),
-        EvolutionPeriod(
-            "6 meses", "141 t", "+22% vs. anterior", listOf("mai", "jun", "jul", "out"),
-            listOf(30, 36, 34, 44, 40, 52, 50, 58, 62, 70, 78, 92),
-        ),
-        EvolutionPeriod(
-            "1 ano", "286 t", "+31% vs. anterior", listOf("nov", "fev", "mai", "out"),
-            listOf(20, 26, 30, 28, 38, 44, 46, 52, 60, 66, 80, 94),
-        ),
-    )
-
-    /**
-     * Os pontos vem do prototipo como coordenadas SVG, onde y cresce para
-     * baixo num quadro de 80. Aqui viram altura relativa de 0 a 100 com y
-     * crescendo para cima, que e como o grafico desenha.
-     */
-    private fun svgToHeights(vararg y: Int) = y.map { (80 - it) / 80f * 100f }
-
-    val exerciseProgress: List<ExerciseProgress> = listOf(
-        ExerciseProgress(
-            "Supino reto", "98 kg", "70 kg em julho", "82,5 kg hoje · recorde",
-            svgToHeights(66, 62, 62, 54, 50, 50, 40, 32, 26, 12),
-        ),
-        ExerciseProgress(
-            "Agachamento livre", "131 kg", "90 kg em julho", "110 kg hoje",
-            svgToHeights(70, 66, 58, 58, 48, 44, 40, 34, 30, 22),
-        ),
-        ExerciseProgress(
-            "Remada curvada", "89 kg", "60 kg em julho", "72,5 kg hoje · recorde",
-            svgToHeights(62, 60, 56, 56, 50, 46, 46, 36, 30, 18),
-        ),
-    )
-
-    val muscleVolumes: List<MuscleVolume> = listOf(
-        MuscleVolume("Costas", 88, "24%"),
-        MuscleVolume("Peito", 76, "21%"),
-        MuscleVolume("Pernas", 62, "17%"),
-        MuscleVolume("Braços", 50, "14%"),
-        MuscleVolume("Ombros", 28, "8%"),
-    )
-
-    const val TOTAL_WORKOUTS = "38"
-    const val WORKOUTS_PER_WEEK = "treinos · 3,2 por semana"
-    const val TOTAL_RECORDS = "9"
-    const val MUSCLE_ALERT = "Ombros abaixo da meta"
 
     const val BODY_WEIGHT = "78,4"
     const val BODY_WEIGHT_DELTA = "−2,1 kg"
@@ -201,16 +128,4 @@ object SeedData {
         reminderLabel = "Seg, Qua, Sex · 18:00",
     )
 
-    /** As series ja registradas do exercicio em andamento no prototipo. */
-    val activeSets = listOf(
-        Triple("67,5 × 10", "70", "10"),
-        Triple("67,5 × 9", "70", "9"),
-        Triple("67,5 × 8", "70", "8"),
-        Triple("65 × 8", "70", "8"),
-    )
-
-    val finishedRecords = listOf(
-        PersonalRecord("Remada curvada", "72,5 kg × 8 · +2,5 kg"),
-        PersonalRecord("Barra fixa", "9 repetições · +1 rep"),
-    )
 }

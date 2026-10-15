@@ -24,12 +24,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import com.serie.app.data.SeedData
+import com.serie.app.domain.Stats
 import com.serie.app.domain.ExerciseProgress
 import com.serie.app.ui.SerieUiState
 import com.serie.app.ui.SerieViewModel
 import com.serie.app.ui.components.Ph
 import com.serie.app.ui.components.PhIcon
+import com.serie.app.ui.components.EmptyState
 import com.serie.app.ui.components.ScreenHeader
 import com.serie.app.ui.components.SectionLabel
 import com.serie.app.ui.components.SerieCard
@@ -48,11 +49,12 @@ fun EvolucaoScreen(
     state: SerieUiState,
     viewModel: SerieViewModel,
     onOpenBody: () -> Unit,
+    onStartWorkout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = Nocturne.colors
-    val period = SeedData.periods[state.period]
-    val progress = SeedData.exerciseProgress[state.progressExercise]
+    val period = state.volumeChart
+    val progress = state.progress
 
     LazyColumn(
         modifier = modifier.fillMaxSize().background(c.bg),
@@ -71,9 +73,24 @@ fun EvolucaoScreen(
             )
         }
 
+        if (!state.hasEnoughHistory) {
+            item {
+                EmptyState(
+                    icon = Ph.chartLineUp,
+                    title = "Poucos dados ainda",
+                    body = "Registre ${Stats.MIN_SESSIONS_FOR_CHARTS} treinos para ver " +
+                        "volume, carga e recordes.",
+                    ctaLabel = "Iniciar treino",
+                    onCta = onStartWorkout,
+                    modifier = Modifier.padding(top = 48.dp),
+                )
+            }
+            return@LazyColumn
+        }
+
         item {
             SerieSegmented(
-                options = SeedData.periods.map { it.label },
+                options = Stats.PERIOD_LABELS,
                 selectedIndex = state.period,
                 onSelect = viewModel::setPeriod,
                 fillWidth = true,
@@ -81,7 +98,7 @@ fun EvolucaoScreen(
             )
         }
 
-        item {
+        if (period != null) item {
             SerieCard(padding = Dimens.cardPaddingTight) {
                 Text("Volume total", style = Nocturne.type.caption, color = c.textMuted)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -107,7 +124,7 @@ fun EvolucaoScreen(
             }
         }
 
-        item {
+        if (progress != null) item {
             SerieCard(padding = Dimens.cardPaddingTight) {
                 Row(
                     modifier = Modifier
@@ -142,16 +159,16 @@ fun EvolucaoScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(SeedData.TOTAL_WORKOUTS, style = Nocturne.type.h1, color = c.text)
+                        Text("${state.totalWorkouts}", style = Nocturne.type.h1, color = c.text)
                         Text(
-                            SeedData.WORKOUTS_PER_WEEK,
+                            Stats.workoutsPerWeek(state.history, state.today),
                             style = Nocturne.type.caption,
                             color = c.textMuted,
                         )
                     }
                     VerticalHairline()
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(SeedData.TOTAL_RECORDS, style = Nocturne.type.h1, color = c.text)
+                        Text("${state.totalRecords}", style = Nocturne.type.h1, color = c.text)
                         Text(
                             "recordes pessoais",
                             style = Nocturne.type.caption,
@@ -170,9 +187,11 @@ fun EvolucaoScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     SectionLabel("Volume por grupo", modifier = Modifier.weight(1f))
-                    SerieTag(SeedData.MUSCLE_ALERT, style = SerieTagStyle.Accent2)
+                    Stats.neglectedGroup(state.muscleVolumes)?.let {
+                        SerieTag(it, style = SerieTagStyle.Accent2)
+                    }
                 }
-                SeedData.muscleVolumes.forEachIndexed { i, muscle ->
+                state.muscleVolumes.forEachIndexed { i, muscle ->
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -199,7 +218,7 @@ fun EvolucaoScreen(
                                     // O ultimo grupo e o que esta abaixo da meta:
                                     // recebe o acento para puxar a atencao.
                                     .background(
-                                        if (i == SeedData.muscleVolumes.lastIndex) c.accent
+                                        if (i == state.muscleVolumes.lastIndex) c.accent
                                         else c.neutral.s400
                                     )
                             )
