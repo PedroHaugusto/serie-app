@@ -21,7 +21,9 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun SerieApp(viewModel: SerieViewModel = viewModel()) {
+private fun SerieApp(
+    viewModel: SerieViewModel = viewModel(factory = SerieViewModel.Factory),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // O tema nao segue o sistema: e uma preferencia do usuario, editavel na
