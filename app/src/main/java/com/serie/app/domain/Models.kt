@@ -74,9 +74,17 @@ data class Workout(
     }
 }
 
-/** Uma serie registrada durante a execucao. */
+/**
+ * Uma serie registrada durante a execucao.
+ *
+ * Carrega o exercicio a que pertence porque a sessao guarda as series de
+ * todos os exercicios do treino ao mesmo tempo - o usuario pode ir e voltar
+ * entre eles, e o que ja registrou precisa continuar la.
+ */
 @Immutable
 data class SetEntry(
+    val exerciseIndex: Int,
+    val exerciseId: String,
     val previous: String,
     val load: String,
     val reps: String,
@@ -125,6 +133,28 @@ data class ActiveSession(
 
     fun restRunningAt(nowMillis: Long): Boolean =
         restEndsAtMillis != null && restEndsAtMillis > nowMillis
+
+    /** As series do exercicio em foco. */
+    fun currentSets(): List<SetEntry> = sets.filter { it.exerciseIndex == exerciseIndex }
+
+    /** Ja existe serie registrada para este exercicio? */
+    fun hasSetsFor(index: Int): Boolean = sets.any { it.exerciseIndex == index }
+
+    /**
+     * Posicao no conjunto completo de series a partir da posicao dentro do
+     * exercicio em foco. A tela conta as series do exercicio; o banco guarda
+     * todas juntas.
+     */
+    fun globalIndexOf(indexWithinExercise: Int): Int {
+        var seen = -1
+        sets.forEachIndexed { i, set ->
+            if (set.exerciseIndex == exerciseIndex) {
+                seen++
+                if (seen == indexWithinExercise) return i
+            }
+        }
+        return -1
+    }
 }
 
 /**
@@ -160,7 +190,7 @@ fun ActiveSession.toView(nowMillis: Long) = ActiveWorkout(
     exerciseId = exerciseId,
     exerciseName = exerciseName,
     goal = goal,
-    sets = sets,
+    sets = currentSets(),
     elapsedSeconds = elapsedSecondsAt(nowMillis),
     restSeconds = restSecondsAt(nowMillis),
     restRunning = restRunningAt(nowMillis),

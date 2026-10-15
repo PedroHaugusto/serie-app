@@ -125,6 +125,7 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             exerciseDraftIsNew = ui.exerciseDraftIsNew,
             exerciseError = ui.exerciseError,
             sessionToDelete = ui.sessionToDelete,
+            discardingWorkout = ui.discardingWorkout,
             summary = ui.summary,
             effort = ui.effort,
             period = ui.period,
@@ -375,6 +376,57 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
     // --------------------------------------------------------------- execucao
 
     /**
+     * Monta as series de um exercicio a partir da prescricao e do historico.
+     *
+     * "Anterior" vem do ultimo treino que registrou este exercicio; a carga e
+     * as reps partem dali, e so caem na prescricao quando nao ha historico.
+     */
+    private suspend fun buildSetsFor(
+        workout: Workout,
+        index: Int,
+    ): List<SetEntry> {
+        val exercise = workout.exercises.getOrNull(index) ?: return emptyList()
+        val lastSets = repository.history.first()
+            .filter { session -> session.sets.any { it.exerciseId == exercise.exerciseId } }
+            .maxByOrNull { it.startedAtMillis }
+            ?.sets
+            ?.filter { it.exerciseId == exercise.exerciseId }
+            .orEmpty()
+
+        val defaultLoad = exercise.load.filter { it.isDigit() || it == ',' }.ifBlank { "0" }
+        val defaultReps = exercise.reps.takeWhile { it.isDigit() }.ifBlank { "0" }
+        return List(exercise.sets) { i ->
+            val previous = lastSets.getOrNull(i)
+            SetEntry(
+                exerciseIndex = index,
+                exerciseId = exercise.exerciseId,
+                previous = previous
+                    ?.let { Stats.formatKg(it.loadKg) + " × " + it.reps }
+                    ?: "—",
+                load = previous?.let { Stats.formatKg(it.loadKg).removeSuffix(" kg") }
+                    ?: defaultLoad,
+                reps = previous?.reps?.toString() ?: defaultReps,
+                done = false,
+            )
+        }
+    }
+
+    private fun goalOf(workout: Workout, index: Int, sets: List<SetEntry>): String {
+        val exercise = workout.exercises.getOrNull(index) ?: return ""
+        val last = sets.firstOrNull()?.previous ?: "—"
+        return "Meta ${exercise.sets} × ${exercise.reps} · última vez $last"
+    }
+
+    /** O descanso do exercicio em foco, ou o padrao quando nao ha prescricao. */
+    private fun restSecondsOf(workoutId: String, index: Int): Int =
+        state.value.workouts
+            .firstOrNull { it.id == workoutId }
+            ?.exercises?.getOrNull(index)
+            ?.restSeconds
+            ?.takeIf { it > 0 }
+            ?: REST_DEFAULT
+
+    /**
      * Comeca o treino - ou retoma o que ja estava em andamento.
      *
      * Retomar e o caso comum depois do app ser morto no bolso: recomecar do
@@ -388,35 +440,7 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             val workout = state.value.workouts.firstOrNull { it.id == workoutId } ?: return@launch
             val index = 0
             val exercise = workout.exercises.getOrNull(index)
-
-            // "Anterior" vem do ultimo treino que registrou este exercicio.
-            // Antes vinha de valores fixos do prototipo, o que mostrava uma
-            // carga que o usuario nunca levantou.
-            val lastSets = repository.history.first()
-                .filter { session -> session.sets.any { it.exerciseId == exercise?.exerciseId } }
-                .maxByOrNull { it.startedAtMillis }
-                ?.sets
-                ?.filter { it.exerciseId == exercise?.exerciseId }
-                .orEmpty()
-
-            val sets = exercise?.let { ex ->
-                val defaultLoad = ex.load.filter { it.isDigit() || it == ',' }.ifBlank { "0" }
-                val defaultReps = ex.reps.takeWhile { it.isDigit() }.ifBlank { "0" }
-                List(ex.sets) { i ->
-                    val previous = lastSets.getOrNull(i)
-                    SetEntry(
-                        previous = previous
-                            ?.let { Stats.formatKg(it.loadKg) + " × " + it.reps }
-                            ?: "—",
-                        load = previous?.let { Stats.formatKg(it.loadKg).removeSuffix(" kg") }
-                            ?: defaultLoad,
-                        reps = previous?.reps?.toString() ?: defaultReps,
-                        // Nenhuma serie nasce fechada: o app gravaria no
-                        // historico series que o usuario nao fez.
-                        done = false,
-                    )
-                }
-            } ?: emptyList()
+            val sets = buildSetsFor(workout, index)
 
             repository.saveActiveSession(
                 ActiveSession(
@@ -427,41 +451,110 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
                     exerciseCount = workout.exercises.size,
                     exerciseId = exercise?.exerciseId.orEmpty(),
                     exerciseName = exercise?.name ?: workout.name,
-                    goal = exercise?.let { ex ->
-                        val last = sets.firstOrNull()?.previous ?: "—"
-                        "Meta ${ex.sets} × ${ex.reps} · última vez $last"
-                    } ?: "",
+                    goal = goalOf(workout, index, sets),
                     sets = sets,
                     startedAtMillis = System.currentTimeMillis(),
                     restEndsAtMillis = null,
-                    restRemainingSeconds = REST_DEFAULT,
+                    restRemainingSeconds = exercise?.restSeconds?.takeIf { it > 0 } ?: REST_DEFAULT,
                 )
             )
         }
+    }
+
+    /**
+     * Troca o exercicio em foco.
+     *
+     * As series do exercicio anterior continuam guardadas: o usuario pode
+     * voltar e completar o que deixou pela metade, e tudo entra no historico
+     * ao finalizar.
+     */
+    fun goToExercise(index: Int) {
+        viewModelScope.launch {
+            val session = repository.activeSession.first() ?: return@launch
+            if (index == session.exerciseIndex) return@launch
+            if (index !in 0 until session.exerciseCount) return@launch
+
+            val workout = state.value.workouts.firstOrNull { it.id == session.workoutId }
+                ?: return@launch
+            val exercise = workout.exercises.getOrNull(index) ?: return@launch
+
+            val sets = if (session.hasSetsFor(index)) {
+                session.sets
+            } else {
+                session.sets + buildSetsFor(workout, index)
+            }
+            val visible = sets.filter { it.exerciseIndex == index }
+
+            repository.saveActiveSession(
+                session.copy(
+                    exerciseIndex = index,
+                    exerciseId = exercise.exerciseId,
+                    exerciseName = exercise.name,
+                    goal = goalOf(workout, index, visible),
+                    sets = sets,
+                    // O descanso nao atravessa a troca: o tempo do exercicio
+                    // anterior nao diz nada sobre o proximo.
+                    restEndsAtMillis = null,
+                    restRemainingSeconds = exercise.restSeconds.takeIf { it > 0 } ?: REST_DEFAULT,
+                )
+            )
+        }
+    }
+
+    fun nextExercise() {
+        val session = state.value.active ?: return
+        goToExercise(session.exerciseIndex + 1)
+    }
+
+    fun previousExercise() {
+        val session = state.value.active ?: return
+        goToExercise(session.exerciseIndex - 1)
+    }
+
+    /** Descarta o treino em andamento sem gravar nada no historico. */
+    fun askDiscardWorkout() = transient.update { it.copy(discardingWorkout = true) }
+
+    fun dismissDiscardWorkout() = transient.update { it.copy(discardingWorkout = false) }
+
+    fun confirmDiscardWorkout() {
+        transient.update { it.copy(discardingWorkout = false) }
+        viewModelScope.launch { repository.clearActiveSession() }
     }
 
     fun updateSetLoad(index: Int, load: String) = updateSet(index) { it.copy(load = load) }
 
     fun updateSetReps(index: Int, reps: String) = updateSet(index) { it.copy(reps = reps) }
 
-    /** Fechar uma serie dispara o descanso; reabrir nao o cancela. */
+    /**
+     * Fechar uma serie dispara o descanso do proprio exercicio.
+     *
+     * O valor vem da prescricao a cada toque, e nao de uma copia feita ao
+     * iniciar: assim editar o descanso no treino passa a valer na hora.
+     */
     fun toggleSetDone(index: Int) = withSession { s ->
-        val nowDone = !s.sets[index].done
+        val global = s.globalIndexOf(index)
+        if (global < 0) return@withSession s
+        val nowDone = !s.sets[global].done
+        val rest = restSecondsOf(s.workoutId, s.exerciseIndex)
         s.copy(
-            sets = s.sets.mapIndexed { i, set -> if (i == index) set.copy(done = nowDone) else set },
+            sets = s.sets.mapIndexed { i, set ->
+                if (i == global) set.copy(done = nowDone) else set
+            },
             restEndsAtMillis = if (nowDone) {
-                System.currentTimeMillis() + REST_DEFAULT * 1000L
+                System.currentTimeMillis() + rest * 1000L
             } else {
                 s.restEndsAtMillis
             },
-            restRemainingSeconds = if (nowDone) REST_DEFAULT else s.restRemainingSeconds,
+            restRemainingSeconds = if (nowDone) rest else s.restRemainingSeconds,
         )
     }
 
     fun addSet() = withSession { s ->
-        val last = s.sets.lastOrNull()
+        val last = s.currentSets().lastOrNull()
         s.copy(
             sets = s.sets + SetEntry(
+                exerciseIndex = s.exerciseIndex,
+                exerciseId = s.exerciseId,
                 previous = "—",
                 load = last?.load ?: "0",
                 reps = last?.reps ?: "0",
@@ -482,7 +575,9 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
     }
 
     private fun updateSet(index: Int, transform: (SetEntry) -> SetEntry) = withSession { s ->
-        s.copy(sets = s.sets.mapIndexed { i, set -> if (i == index) transform(set) else set })
+        val global = s.globalIndexOf(index)
+        if (global < 0) return@withSession s
+        s.copy(sets = s.sets.mapIndexed { i, set -> if (i == global) transform(set) else set })
     }
 
     private fun withSession(transform: (ActiveSession) -> ActiveSession) {
@@ -506,14 +601,18 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             val now = System.currentTimeMillis()
             val snapshot = state.value
 
-            val libraryEntry = snapshot.library.firstOrNull { it.id == session.exerciseId }
+            val workout = snapshot.workouts.firstOrNull { it.id == session.workoutId }
 
+            // Grava as series de todos os exercicios, nao so as do que estava
+            // em foco: o usuario percorre o treino inteiro numa sessao.
             val completedSets = session.sets.filter { it.done }.mapNotNull { set ->
                 val load = set.load.replace(',', '.').toDoubleOrNull() ?: return@mapNotNull null
                 val reps = set.reps.toIntOrNull() ?: return@mapNotNull null
+                val exercise = workout?.exercises?.getOrNull(set.exerciseIndex)
+                val libraryEntry = snapshot.library.firstOrNull { it.id == set.exerciseId }
                 CompletedSet(
-                    exerciseId = session.exerciseId.ifEmpty { session.workoutId },
-                    exerciseName = session.exerciseName,
+                    exerciseId = set.exerciseId.ifEmpty { session.workoutId },
+                    exerciseName = exercise?.name ?: session.exerciseName,
                     muscleGroup = libraryEntry?.group ?: MuscleGroup.Peito,
                     loadKg = load,
                     reps = reps,
@@ -684,6 +783,7 @@ private data class TransientState(
     val exerciseDraftIsNew: Boolean = false,
     val exerciseError: String? = null,
     val sessionToDelete: CompletedSession? = null,
+    val discardingWorkout: Boolean = false,
     val editingProfile: Boolean = false,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,
@@ -706,6 +806,7 @@ data class SerieUiState(
     val exerciseDraftIsNew: Boolean = false,
     val exerciseError: String? = null,
     val sessionToDelete: CompletedSession? = null,
+    val discardingWorkout: Boolean = false,
     val active: ActiveWorkout? = null,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,

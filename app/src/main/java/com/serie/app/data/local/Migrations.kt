@@ -137,4 +137,23 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
-val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+/**
+ * 5 -> 6: a sessao passa a guardar as series de todos os exercicios.
+ *
+ * As linhas que ja existem sao do unico exercicio que a versao anterior
+ * registrava, entao o default 0 as coloca corretamente no primeiro.
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `active_sets` ADD COLUMN `exerciseIndex` INTEGER NOT NULL DEFAULT 0"
+        )
+        db.execSQL(
+            "ALTER TABLE `active_sets` ADD COLUMN `exerciseId` TEXT NOT NULL DEFAULT ''"
+        )
+    }
+}
+
+val ALL_MIGRATIONS = arrayOf(
+    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+)

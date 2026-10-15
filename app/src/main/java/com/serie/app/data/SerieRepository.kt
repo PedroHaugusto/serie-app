@@ -343,6 +343,8 @@ private fun CompletedSet.toEntity(sessionId: String) = SessionSetEntity(
 )
 
 private fun ActiveSetEntity.toDomain() = SetEntry(
+    exerciseIndex = exerciseIndex,
+    exerciseId = exerciseId,
     previous = previous,
     load = load,
     reps = reps,
@@ -350,6 +352,8 @@ private fun ActiveSetEntity.toDomain() = SetEntry(
 )
 
 private fun SetEntry.toEntity(position: Int) = ActiveSetEntity(
+    exerciseIndex = exerciseIndex,
+    exerciseId = exerciseId,
     position = position,
     previous = previous,
     load = load,

@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.dp
 import com.serie.app.domain.SetEntry
 import com.serie.app.ui.SerieUiState
@@ -38,6 +39,7 @@ import com.serie.app.ui.theme.Dimens
 import com.serie.app.ui.theme.Nocturne
 import com.serie.app.ui.theme.Radius
 import com.serie.app.ui.theme.accentGlow
+import com.serie.app.ui.theme.elevLg
 import com.serie.app.ui.theme.elevSm
 
 /** Duracao cheia do descanso, usada para medir o progresso da barra. */
@@ -49,10 +51,13 @@ fun ExecucaoScreen(
     state: SerieUiState,
     viewModel: SerieViewModel,
     onFinish: () -> Unit,
+    onDiscarded: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = Nocturne.colors
     val active = state.active ?: return
+    val hasPrevious = active.exerciseIndex > 0
+    val hasNext = active.exerciseIndex < active.exerciseCount - 1
 
     Column(modifier.fillMaxSize().background(c.bg)) {
         Row(
@@ -60,7 +65,17 @@ fun ExecucaoScreen(
                 .fillMaxWidth()
                 .padding(horizontal = Dimens.screenMargin, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Sair sem gravar precisa existir ao lado de Finalizar: antes, o
+            // unico jeito de abandonar um treino era registra-lo.
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(50))
+                    .clickable(onClick = viewModel::askDiscardWorkout),
+                contentAlignment = Alignment.Center,
+            ) { PhIcon(Ph.x, size = 20.dp, tint = c.textMuted) }
             Column(Modifier.weight(1f)) {
                 Text(
                     "Treino ${active.workoutLetter} · ${formatClock(active.elapsedSeconds)}",
@@ -147,21 +162,37 @@ fun ExecucaoScreen(
             }
 
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SerieBlockButton(
-                        label = "Série",
-                        onClick = viewModel::addSet,
-                        style = SerieButtonStyle.Secondary,
-                        leadingIcon = Ph.plus,
-                        height = Dimens.touchTargetMin,
+                SerieBlockButton(
+                    label = "Série",
+                    onClick = viewModel::addSet,
+                    style = SerieButtonStyle.Secondary,
+                    leadingIcon = Ph.plus,
+                    height = Dimens.touchTargetMin,
+                )
+            }
+
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ExerciseStep(
+                        icon = Ph.arrowLeft,
+                        enabled = hasPrevious,
+                        onClick = viewModel::previousExercise,
+                    )
+                    Text(
+                        "Exercício ${active.exerciseIndex + 1} de ${active.exerciseCount}",
+                        style = Nocturne.type.segment,
+                        color = c.textSecondary,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f),
                     )
-                    SerieBlockButton(
-                        label = "Trocar",
-                        onClick = {},
-                        style = SerieButtonStyle.Secondary,
-                        height = Dimens.touchTargetMin,
-                        modifier = Modifier.weight(1f),
+                    ExerciseStep(
+                        icon = Ph.arrowRight,
+                        enabled = hasNext,
+                        onClick = viewModel::nextExercise,
                     )
                 }
             }
@@ -174,6 +205,84 @@ fun ExecucaoScreen(
             onMinus = { viewModel.adjustRest(-15) },
             onPlus = { viewModel.adjustRest(15) },
         )
+    }
+
+    if (state.discardingWorkout) {
+        DiscardDialog(
+            onDismiss = viewModel::dismissDiscardWorkout,
+            onConfirm = {
+                viewModel.confirmDiscardWorkout()
+                onDiscarded()
+            },
+        )
+    }
+}
+
+/** Seta de avancar ou voltar exercicio. */
+@Composable
+private fun ExerciseStep(icon: PhIcon, enabled: Boolean, onClick: () -> Unit) {
+    val c = Nocturne.colors
+    Box(
+        Modifier
+            .size(Dimens.touchTargetMin)
+            .clip(Radius.md)
+            .background(c.neutral.s800)
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        PhIcon(icon, size = 18.dp, tint = if (enabled) c.textSecondary else c.neutral.s600)
+    }
+}
+
+/**
+ * Confirmacao de descarte.
+ *
+ * Descartar joga fora o que foi registrado e nao entra no historico - o
+ * oposto de Finalizar, que fica ao lado. A confirmacao existe para que os dois
+ * nao sejam confundidos num toque apressado.
+ */
+@Composable
+private fun DiscardDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val c = Nocturne.colors
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .elevLg(Radius.lg)
+                .clip(Radius.lg)
+                .background(c.surface)
+                .elevSm(Radius.lg)
+                .padding(Dimens.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(Dimens.blockGap),
+        ) {
+            Text("Descartar treino?", style = Nocturne.type.h2, color = c.text)
+            Text(
+                "O que você registrou será perdido e nada entra no histórico. " +
+                    "Para guardar, use Finalizar.",
+                style = Nocturne.type.bodySmall,
+                color = c.textSecondary,
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SerieBlockButton(
+                    label = "Continuar treino",
+                    onClick = onDismiss,
+                    style = SerieButtonStyle.Secondary,
+                    modifier = Modifier.weight(1f),
+                )
+                SerieBlockButton(
+                    label = "Descartar",
+                    onClick = onConfirm,
+                    leadingIcon = Ph.trash,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
     }
 }
 

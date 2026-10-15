@@ -130,6 +130,9 @@ data class ActiveSessionEntity(
 @Entity(tableName = "active_sets")
 data class ActiveSetEntity(
     @PrimaryKey(autoGenerate = true) val uid: Long = 0,
+    /** A qual exercicio do treino esta serie pertence. */
+    val exerciseIndex: Int = 0,
+    val exerciseId: String = "",
     val position: Int,
     val previous: String,
     val load: String,

@@ -172,6 +172,11 @@ fun SerieNavHost(
                     ExecucaoScreen(
                         state = state,
                         viewModel = viewModel,
+                        onDiscarded = {
+                            navController.navigate(Routes.HOJE) {
+                                popUpTo(Routes.HOJE) { inclusive = true }
+                            }
+                        },
                         onFinish = {
                             viewModel.finishWorkout()
                             navController.navigate(Routes.RESUMO) {
