@@ -28,6 +28,7 @@ import com.serie.app.ui.theme.Dimens
 import com.serie.app.ui.theme.Nocturne
 import com.serie.app.ui.theme.Radius
 import com.serie.app.ui.theme.elevLg
+import com.serie.app.ui.theme.elevSm
 
 /**
  * Criacao de exercicio personalizado.
@@ -53,9 +54,11 @@ fun CriarExercicioDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // Sombra antes do fundo, contorno depois.
+                .elevLg(Radius.lg)
                 .clip(Radius.lg)
                 .background(c.surface)
-                .elevLg(Radius.lg)
+                .elevSm(Radius.lg)
                 .padding(Dimens.cardPadding),
             verticalArrangement = Arrangement.spacedBy(Dimens.blockGap),
         ) {

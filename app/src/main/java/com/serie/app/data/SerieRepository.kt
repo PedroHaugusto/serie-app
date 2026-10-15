@@ -6,6 +6,8 @@ import com.serie.app.data.local.ActiveSetEntity
 import com.serie.app.data.local.LibraryDao
 import com.serie.app.data.local.LibraryExerciseEntity
 import com.serie.app.data.local.PreferencesDao
+import com.serie.app.data.local.ProfileDao
+import com.serie.app.data.local.ProfileEntity
 import com.serie.app.data.local.PreferencesEntity
 import com.serie.app.data.local.SerieDatabase
 import com.serie.app.data.local.WorkoutDao
@@ -16,6 +18,7 @@ import com.serie.app.domain.ActiveSession
 import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.Preferences
+import com.serie.app.domain.UserProfile
 import com.serie.app.domain.SetEntry
 import com.serie.app.domain.Workout
 import com.serie.app.domain.WorkoutExercise
@@ -35,6 +38,7 @@ class SerieRepository(
     private val libraryDao: LibraryDao,
     private val preferencesDao: PreferencesDao,
     private val activeSessionDao: ActiveSessionDao,
+    private val profileDao: ProfileDao,
 ) {
 
     constructor(database: SerieDatabase) : this(
@@ -42,6 +46,7 @@ class SerieRepository(
         database.libraryDao(),
         database.preferencesDao(),
         database.activeSessionDao(),
+        database.profileDao(),
     )
 
     val workouts: Flow<List<Workout>> =
@@ -49,6 +54,21 @@ class SerieRepository(
 
     val library: Flow<List<LibraryExercise>> =
         libraryDao.observeAll().map { rows -> rows.map { it.toDomain() } }
+
+    /**
+     * O perfil. Cai no padrao enquanto a linha nao existe - caso de quem
+     * atualizou o app vindo de uma versao anterior ao perfil editavel.
+     */
+    val profile: Flow<UserProfile> =
+        profileDao.observe().map { row ->
+            row?.let { SeedData.profile.copy(name = it.name, since = it.since) }
+                ?: SeedData.profile
+        }
+
+    suspend fun updateProfile(name: String, since: String) {
+        val cleanName = name.trim().ifEmpty { SeedData.profile.name }
+        profileDao.upsert(ProfileEntity(name = cleanName, since = since.trim()))
+    }
 
     val preferences: Flow<Preferences?> =
         preferencesDao.observe().map { it?.toDomain() }
@@ -135,6 +155,9 @@ class SerieRepository(
             )
         }
         preferencesDao.upsert(SeedData.preferences.toEntity())
+        profileDao.upsert(
+            ProfileEntity(name = SeedData.profile.name, since = SeedData.profile.since)
+        )
     }
 }
 

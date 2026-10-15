@@ -53,4 +53,23 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2)
+/**
+ * 2 -> 3: perfil editavel.
+ *
+ * A linha de perfil nao e criada aqui. Quem ja usava o app fica sem ela ate a
+ * primeira carga, e o repositorio trata a ausencia caindo no perfil padrao -
+ * inserir dados dentro da migracao exigiria repetir aqui o conteudo do seed.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `profile` (" +
+                "`id` INTEGER NOT NULL, " +
+                "`name` TEXT NOT NULL, " +
+                "`since` TEXT NOT NULL, " +
+                "PRIMARY KEY(`id`))"
+        )
+    }
+}
+
+val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

@@ -25,20 +25,25 @@ fun Modifier.elevSm(shape: Shape): Modifier = composed {
     border(Dimens.hairline, Nocturne.colors.shadowHairline, shape)
 }
 
-/** Nivel 2: contorno mais claro e sombra ambiente. */
+/**
+ * Niveis 2 e 3: a sombra ambiente.
+ *
+ * Diferente de [elevSm], estes devem ser aplicados ANTES do fundo. Sombra e
+ * uma camada de desenho propria: posta depois do `background`, ela passa a
+ * valer para o conteudo e nao para a caixa, e aparece como um retangulo claro
+ * por tras dos filhos. A borda, ao contrario, vem sempre depois do fundo -
+ * por isso nao esta junta aqui.
+ */
 @Composable
 fun Modifier.elevMd(shape: Shape): Modifier = composed {
     val c = Nocturne.colors
     shadow(6.dp, shape, clip = false, ambientColor = c.shadowAmbient, spotColor = c.shadowAmbient)
-        .border(Dimens.hairline, c.neutral.s700, shape)
 }
 
-/** Nivel 3: usado por dialogos e folhas. */
 @Composable
 fun Modifier.elevLg(shape: Shape): Modifier = composed {
     val c = Nocturne.colors
     shadow(16.dp, shape, clip = false, ambientColor = c.shadowAmbient, spotColor = c.shadowAmbient)
-        .border(Dimens.hairline, c.neutral.s500, shape)
 }
 
 /**

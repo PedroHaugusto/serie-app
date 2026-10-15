@@ -15,6 +15,7 @@ import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.PersonalRecord
 import com.serie.app.domain.Preferences
 import com.serie.app.domain.SetEntry
+import com.serie.app.domain.UserProfile
 import com.serie.app.domain.Workout
 import com.serie.app.domain.WorkoutExercise
 import com.serie.app.domain.WorkoutSummary
@@ -59,8 +60,9 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
         repository.library,
         repository.preferences,
         repository.activeSession,
-    ) { workouts, library, preferences, session ->
-        PersistedState(workouts, library, preferences ?: SeedData.preferences, session)
+        repository.profile,
+    ) { workouts, library, preferences, session, profile ->
+        PersistedState(workouts, library, preferences ?: SeedData.preferences, session, profile)
     }
 
     val state: StateFlow<SerieUiState> = combine(persisted, transient) { db, ui ->
@@ -68,6 +70,8 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             workouts = db.workouts,
             library = db.library,
             preferences = db.preferences,
+            profile = db.profile,
+            editingProfile = ui.editingProfile,
             // A sessao guardada so vira numero de cronometro aqui, resolvida
             // contra o tique atual.
             active = db.session?.toView(ui.nowMillis),
@@ -444,6 +448,17 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
         it.copy(progressExercise = (it.progressExercise + 1) % SeedData.exerciseProgress.size)
     }
 
+    // ------------------------------------------------------------------ perfil
+
+    fun openEditProfile() = transient.update { it.copy(editingProfile = true) }
+
+    fun dismissEditProfile() = transient.update { it.copy(editingProfile = false) }
+
+    fun saveProfile(name: String, since: String) {
+        transient.update { it.copy(editingProfile = false) }
+        viewModelScope.launch { repository.updateProfile(name, since) }
+    }
+
     // ------------------------------------------------------------ preferencias
 
     fun setWeeklyGoal(index: Int) = updatePrefs { it.copy(weeklyGoal = index + 3) }
@@ -492,6 +507,7 @@ private data class PersistedState(
     val library: List<LibraryExercise>,
     val preferences: Preferences,
     val session: ActiveSession?,
+    val profile: UserProfile,
 )
 
 /** A parte do estado que vive so enquanto a tela esta aberta. */
@@ -506,6 +522,7 @@ private data class TransientState(
     val libraryPicked: Set<String> = emptySet(),
     val creatingExercise: Boolean = false,
     val createExerciseError: String? = null,
+    val editingProfile: Boolean = false,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,
     val period: Int = 1,
@@ -531,6 +548,8 @@ data class SerieUiState(
     val period: Int = 1,
     val progressExercise: Int = 0,
     val preferences: Preferences = SeedData.preferences,
+    val profile: UserProfile = SeedData.profile,
+    val editingProfile: Boolean = false,
 ) {
     val records: List<PersonalRecord> get() = SeedData.finishedRecords
 }

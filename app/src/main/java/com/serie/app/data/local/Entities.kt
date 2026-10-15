@@ -133,3 +133,21 @@ data class ActiveSetEntity(
     val reps: String,
     val done: Boolean,
 )
+
+/**
+ * O perfil do usuario, tambem numa linha unica.
+ *
+ * So nome e data de inicio: treinos, sequencia e recordes sao calculados do
+ * historico e nao devem ser editaveis - um numero que o usuario digita nao e
+ * uma estatistica.
+ */
+@Entity(tableName = "profile")
+data class ProfileEntity(
+    @PrimaryKey val id: Int = SINGLE_ROW,
+    val name: String,
+    val since: String,
+) {
+    companion object {
+        const val SINGLE_ROW = 1
+    }
+}

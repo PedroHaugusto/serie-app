@@ -44,7 +44,7 @@ fun PerfilScreen(
     modifier: Modifier = Modifier,
 ) {
     val c = Nocturne.colors
-    val profile = SeedData.profile
+    val profile = state.profile
     val prefs = state.preferences
 
     LazyColumn(
@@ -59,7 +59,11 @@ fun PerfilScreen(
     ) {
         item {
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth()
+                    .clip(Radius.lg)
+                    .clickable(onClick = viewModel::openEditProfile)
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
@@ -72,10 +76,15 @@ fun PerfilScreen(
                 ) {
                     Text(profile.initial, style = Nocturne.type.h1, color = c.accent)
                 }
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(profile.name, style = Nocturne.type.h2, color = c.text)
-                    Text(profile.since, style = Nocturne.type.caption, color = c.textMuted)
+                    Text(
+                        "Treinando desde ${profile.since}",
+                        style = Nocturne.type.caption,
+                        color = c.textMuted,
+                    )
                 }
+                Text("Editar", style = Nocturne.type.segment, color = c.accent)
             }
         }
 
@@ -188,6 +197,14 @@ fun PerfilScreen(
                 Text("Sair", style = Nocturne.type.button, color = c.accent2)
             }
         }
+    }
+
+    if (state.editingProfile) {
+        EditarPerfilDialog(
+            profile = profile,
+            onDismiss = viewModel::dismissEditProfile,
+            onSave = viewModel::saveProfile,
+        )
     }
 }
 

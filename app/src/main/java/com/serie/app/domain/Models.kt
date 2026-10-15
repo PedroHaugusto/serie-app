@@ -227,12 +227,19 @@ data class MuscleVolume(
 @Immutable
 data class UserProfile(
     val name: String,
-    val initial: String,
+    /** Quando comecou a treinar, como texto livre: "março de 2026". */
     val since: String,
     val workouts: Int,
     val streak: Int,
     val records: Int,
-)
+) {
+    /**
+     * A inicial do avatar deriva do nome em vez de ser um campo proprio:
+     * guardada a parte, ficaria desatualizada no instante em que o usuario
+     * trocasse o nome.
+     */
+    val initial: String get() = name.trim().firstOrNull()?.uppercase() ?: "?"
+}
 
 /** Preferencias do usuario, todas editaveis na tela de perfil. */
 @Immutable

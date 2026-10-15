@@ -103,7 +103,6 @@ object SeedData {
     )
 
     const val TODAY_LABEL = "Quarta, 14 de outubro"
-    const val GREETING = "Bom dia, Rafa"
     const val WEEK_PROGRESS = "3 de 5 treinos"
 
     const val STREAK_DAYS = "12"
@@ -188,8 +187,7 @@ object SeedData {
 
     val profile = UserProfile(
         name = "Rafael Lima",
-        initial = "R",
-        since = "Treinando desde março de 2026",
+        since = "março de 2026",
         workouts = 38,
         streak = 12,
         records = 9,

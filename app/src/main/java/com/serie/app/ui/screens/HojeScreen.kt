@@ -68,7 +68,13 @@ fun HojeScreen(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(SeedData.TODAY_LABEL, style = Nocturne.type.label, color = c.textMuted)
-                    Text(SeedData.GREETING, style = Nocturne.type.h1, color = c.text)
+                    // Primeiro nome do perfil: com o nome editavel, uma
+                    // saudacao fixa passaria a chamar o usuario de outra pessoa.
+                    Text(
+                        "Bom dia, ${state.profile.name.trim().substringBefore(' ')}",
+                        style = Nocturne.type.h1,
+                        color = c.text,
+                    )
                 }
                 Box(
                     Modifier
@@ -78,7 +84,7 @@ fun HojeScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        SeedData.profile.initial,
+                        state.profile.initial,
                         style = Nocturne.type.itemTitle,
                         color = c.accent,
                     )

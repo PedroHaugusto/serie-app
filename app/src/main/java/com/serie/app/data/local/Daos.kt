@@ -135,3 +135,16 @@ interface PreferencesDao {
     @Upsert
     suspend fun upsert(preferences: PreferencesEntity)
 }
+
+@Dao
+interface ProfileDao {
+
+    @Query("SELECT * FROM profile WHERE id = :id")
+    fun observe(id: Int = ProfileEntity.SINGLE_ROW): Flow<ProfileEntity?>
+
+    @Query("SELECT * FROM profile WHERE id = :id")
+    suspend fun find(id: Int = ProfileEntity.SINGLE_ROW): ProfileEntity?
+
+    @Upsert
+    suspend fun upsert(profile: ProfileEntity)
+}

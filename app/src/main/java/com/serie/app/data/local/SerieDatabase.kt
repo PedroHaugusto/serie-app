@@ -13,8 +13,9 @@ import androidx.room.RoomDatabase
         PreferencesEntity::class,
         ActiveSessionEntity::class,
         ActiveSetEntity::class,
+        ProfileEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class SerieDatabase : RoomDatabase() {
@@ -23,6 +24,7 @@ abstract class SerieDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
     abstract fun preferencesDao(): PreferencesDao
     abstract fun activeSessionDao(): ActiveSessionDao
+    abstract fun profileDao(): ProfileDao
 
     companion object {
         private const val NAME = "serie.db"
