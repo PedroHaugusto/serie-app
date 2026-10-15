@@ -127,9 +127,21 @@ data class ActiveSession(
     fun elapsedSecondsAt(nowMillis: Long): Int =
         ((nowMillis - startedAtMillis) / 1000).coerceAtLeast(0).toInt()
 
-    fun restSecondsAt(nowMillis: Long): Int = restEndsAtMillis
-        ?.let { ((it - nowMillis + 999) / 1000).coerceAtLeast(0).toInt() }
-        ?: restRemainingSeconds
+    /**
+     * Quanto falta de descanso.
+     *
+     * Terminado o descanso, volta a mostrar a duracao cheia em vez de ficar
+     * parado em zero: zero permanente fazia a barra parecer quebrada e nao
+     * dava para perceber que ela so anda depois de uma serie ser marcada.
+     */
+    fun restSecondsAt(nowMillis: Long): Int {
+        val ends = restEndsAtMillis
+        return if (ends != null && ends > nowMillis) {
+            ((ends - nowMillis + 999) / 1000).toInt()
+        } else {
+            restRemainingSeconds
+        }
+    }
 
     fun restRunningAt(nowMillis: Long): Boolean =
         restEndsAtMillis != null && restEndsAtMillis > nowMillis
@@ -174,6 +186,13 @@ data class ActiveWorkout(
     val sets: List<SetEntry>,
     val elapsedSeconds: Int,
     val restSeconds: Int,
+    /**
+     * Duracao configurada do descanso deste exercicio.
+     *
+     * Serve a duas coisas: medir o progresso enquanto corre, e ser o numero
+     * mostrado quando esta parado - inclusive depois de terminar.
+     */
+    val restTotalSeconds: Int,
     val restRunning: Boolean,
 ) {
     /** Indice da proxima serie nao concluida, ou -1 se todas fecharam. */
@@ -193,6 +212,7 @@ fun ActiveSession.toView(nowMillis: Long) = ActiveWorkout(
     sets = currentSets(),
     elapsedSeconds = elapsedSecondsAt(nowMillis),
     restSeconds = restSecondsAt(nowMillis),
+    restTotalSeconds = restRemainingSeconds,
     restRunning = restRunningAt(nowMillis),
 )
 

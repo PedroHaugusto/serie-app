@@ -591,9 +591,18 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
         val now = System.currentTimeMillis()
         val ends = s.restEndsAtMillis
         if (ends != null && ends > now) {
+            // So o fim se move. restRemainingSeconds guarda a duracao
+            // configurada do exercicio e e o que a barra mostra quando esta
+            // parada - mexer nele deixaria "00:01" no lugar do tempo cheio
+            // depois de drenar o descanso com -15s.
             s.copy(restEndsAtMillis = (ends + deltaSeconds * 1000L).coerceAtLeast(now))
         } else {
-            s.copy(restRemainingSeconds = (s.restRemainingSeconds + deltaSeconds).coerceAtLeast(0))
+            // Parado, o ajuste muda a duracao do proximo descanso. O piso de
+            // 15 s evita chegar a um "00:00" que nao e um descanso.
+            s.copy(
+                restRemainingSeconds =
+                    (s.restRemainingSeconds + deltaSeconds).coerceAtLeast(15)
+            )
         }
     }
 

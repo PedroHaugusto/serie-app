@@ -121,6 +121,10 @@ fun EditarTreinoScreen(
         itemsIndexed(draft.exercises, key = { _, e -> e.id }) { index, exercise ->
             ExerciseEditorRow(
                 exercise = exercise,
+                notes = state.library
+                    .firstOrNull { it.id == exercise.exerciseId }
+                    ?.notes
+                    .orEmpty(),
                 expanded = state.expandedExercise == index,
                 canMoveUp = index > 0,
                 canMoveDown = index < draft.exercises.lastIndex,
@@ -171,6 +175,7 @@ fun EditarTreinoScreen(
 @Composable
 private fun ExerciseEditorRow(
     exercise: WorkoutExercise,
+    notes: String,
     expanded: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
@@ -242,6 +247,19 @@ private fun ExerciseEditorRow(
                     keyboardType = KeyboardType.Number,
                     modifier = Modifier.weight(1f),
                 )
+            }
+
+            // A dica do exercicio aparece aqui tambem, e nao so durante a
+            // serie: quem monta o treino precisa lembrar do cuidado que
+            // escreveu antes de decidir carga e repeticoes.
+            if (notes.isNotBlank()) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PhIcon(Ph.info, size = 15.dp, tint = c.accent)
+                    Text(notes, style = Nocturne.type.bodySmall, color = c.textSecondary)
+                }
             }
 
             SerieTag(
