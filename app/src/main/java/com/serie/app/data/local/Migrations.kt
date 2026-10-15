@@ -119,4 +119,22 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
-val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+/**
+ * 4 -> 5: descricao nos exercicios e o exercicio da sessao por id.
+ *
+ * Duas colunas de texto com DEFAULT vazio. O default so existe para as linhas
+ * que ja estao no banco: o Room declara as colunas sem default, e por isso ele
+ * nao aparece no esquema exportado.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `library_exercises` ADD COLUMN `notes` TEXT NOT NULL DEFAULT ''"
+        )
+        db.execSQL(
+            "ALTER TABLE `active_session` ADD COLUMN `exerciseId` TEXT NOT NULL DEFAULT ''"
+        )
+    }
+}
+
+val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

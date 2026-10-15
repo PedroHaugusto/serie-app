@@ -31,6 +31,7 @@ import com.serie.app.ui.SerieViewModel
 import com.serie.app.ui.components.Ph
 import com.serie.app.ui.components.PhIcon
 import com.serie.app.ui.components.EmptyState
+import com.serie.app.ui.components.ListRow
 import com.serie.app.ui.components.ScreenHeader
 import com.serie.app.ui.components.SectionLabel
 import com.serie.app.ui.components.SerieCard
@@ -50,6 +51,7 @@ fun EvolucaoScreen(
     viewModel: SerieViewModel,
     onOpenBody: () -> Unit,
     onStartWorkout: () -> Unit,
+    onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = Nocturne.colors
@@ -85,10 +87,9 @@ fun EvolucaoScreen(
                     modifier = Modifier.padding(top = 48.dp),
                 )
             }
-            return@LazyColumn
         }
 
-        item {
+        if (state.hasEnoughHistory) item {
             SerieSegmented(
                 options = Stats.PERIOD_LABELS,
                 selectedIndex = state.period,
@@ -98,7 +99,7 @@ fun EvolucaoScreen(
             )
         }
 
-        if (period != null) item {
+        if (state.hasEnoughHistory && period != null) item {
             SerieCard(padding = Dimens.cardPaddingTight) {
                 Text("Volume total", style = Nocturne.type.caption, color = c.textMuted)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -124,7 +125,7 @@ fun EvolucaoScreen(
             }
         }
 
-        if (progress != null) item {
+        if (state.hasEnoughHistory && progress != null) item {
             SerieCard(padding = Dimens.cardPaddingTight) {
                 Row(
                     modifier = Modifier
@@ -152,7 +153,7 @@ fun EvolucaoScreen(
             }
         }
 
-        item {
+        if (state.hasEnoughHistory) item {
             SerieCard(padding = Dimens.cardPaddingTight) {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -179,7 +180,7 @@ fun EvolucaoScreen(
             }
         }
 
-        item {
+        if (state.hasEnoughHistory) item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -230,6 +231,27 @@ fun EvolucaoScreen(
                             modifier = Modifier.width(32.dp),
                         )
                     }
+                }
+            }
+        }
+
+        // Fica fora do condicional dos graficos de proposito: com uma ou duas
+        // sessoes os graficos nao aparecem, e o historico precisa continuar
+        // alcancavel - e onde se apaga um registro errado.
+        if (state.history.isNotEmpty()) item {
+            ListRow(
+                onClick = onOpenHistory,
+                leading = { PhIcon(Ph.stack, size = 20.dp, tint = c.textSecondary) },
+                trailing = { PhIcon(Ph.caretRight, size = 16.dp, tint = c.textMuted) },
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                Column {
+                    Text("Histórico", style = Nocturne.type.itemTitle, color = c.text)
+                    Text(
+                        "${state.history.size} treinos registrados",
+                        style = Nocturne.type.caption,
+                        color = c.textMuted,
+                    )
                 }
             }
         }

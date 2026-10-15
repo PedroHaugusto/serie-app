@@ -62,6 +62,8 @@ object Ph {
     val house = PhIcon(0xe2c2)
     /** ph-image */
     val image = PhIcon(0xe2ca)
+    /** ph-info */
+    val info = PhIcon(0xe2ce)
     /** ph-lock-simple */
     val lockSimple = PhIcon(0xe308)
     /** ph-magnifying-glass */

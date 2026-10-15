@@ -127,6 +127,7 @@ class SerieRepository(
         name: String,
         group: MuscleGroup,
         equipment: String,
+        notes: String,
     ): LibraryExercise? {
         val trimmed = name.trim()
         if (trimmed.isEmpty() || libraryDao.countByName(trimmed) > 0) return null
@@ -136,10 +137,35 @@ class SerieRepository(
             group = group,
             equipment = equipment.trim().ifEmpty { "Livre" },
             isCustom = true,
+            notes = notes.trim(),
         )
         libraryDao.upsert(exercise.toEntity())
         return exercise
     }
+
+    /**
+     * Edita um exercicio existente.
+     *
+     * Vale tambem para os do catalogo inicial: a biblioteca e do usuario, e
+     * uma dica de execucao so serve se puder ser escrita no exercicio que ele
+     * de fato usa.
+     */
+    suspend fun updateExercise(exercise: LibraryExercise): Boolean {
+        val trimmed = exercise.name.trim()
+        if (trimmed.isEmpty()) return false
+        val clash = libraryDao.findByName(trimmed)
+        if (clash != null && clash.id != exercise.id) return false
+        libraryDao.upsert(
+            exercise.copy(
+                name = trimmed,
+                equipment = exercise.equipment.trim().ifEmpty { "Livre" },
+                notes = exercise.notes.trim(),
+            ).toEntity()
+        )
+        return true
+    }
+
+    suspend fun deleteSession(id: String) = sessionDao.delete(id)
 
     suspend fun deleteCustomExercise(id: String) = libraryDao.deleteCustom(id)
 
@@ -236,6 +262,7 @@ private fun LibraryExerciseEntity.toDomain() = LibraryExercise(
     group = runCatching { MuscleGroup.valueOf(muscleGroup) }.getOrDefault(MuscleGroup.Peito),
     equipment = equipment,
     isCustom = isCustom,
+    notes = notes,
 )
 
 private fun LibraryExercise.toEntity() = LibraryExerciseEntity(
@@ -244,6 +271,7 @@ private fun LibraryExercise.toEntity() = LibraryExerciseEntity(
     muscleGroup = group.name,
     equipment = equipment,
     isCustom = isCustom,
+    notes = notes,
 )
 
 private fun ActiveSessionEntity.toDomain(sets: List<SetEntry>) = ActiveSession(
@@ -252,6 +280,7 @@ private fun ActiveSessionEntity.toDomain(sets: List<SetEntry>) = ActiveSession(
     workoutName = workoutName,
     exerciseIndex = exerciseIndex,
     exerciseCount = exerciseCount,
+    exerciseId = exerciseId,
     exerciseName = exerciseName,
     goal = goal,
     sets = sets,
@@ -266,6 +295,7 @@ private fun ActiveSession.toEntity() = ActiveSessionEntity(
     workoutName = workoutName,
     exerciseIndex = exerciseIndex,
     exerciseCount = exerciseCount,
+    exerciseId = exerciseId,
     exerciseName = exerciseName,
     goal = goal,
     startedAtMillis = startedAtMillis,

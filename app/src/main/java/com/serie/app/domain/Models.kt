@@ -24,6 +24,8 @@ data class LibraryExercise(
     val equipment: String,
     /** Criado pelo usuario, em vez de vir do catalogo inicial. */
     val isCustom: Boolean = false,
+    /** Dicas de execucao, cuidados, variacoes - texto livre do usuario. */
+    val notes: String = "",
 )
 
 /**
@@ -97,6 +99,14 @@ data class ActiveSession(
     val workoutName: String,
     val exerciseIndex: Int,
     val exerciseCount: Int,
+    /**
+     * Id do exercicio na biblioteca.
+     *
+     * Guardado junto da sessao, e nao deduzido do indice na hora de gravar: o
+     * treino pode ser editado enquanto a sessao corre, e o indice passaria a
+     * apontar para outro exercicio.
+     */
+    val exerciseId: String,
     val exerciseName: String,
     val goal: String,
     val sets: List<SetEntry>,
@@ -128,6 +138,7 @@ data class ActiveWorkout(
     val workoutName: String,
     val exerciseIndex: Int,
     val exerciseCount: Int,
+    val exerciseId: String,
     val exerciseName: String,
     val goal: String,
     val sets: List<SetEntry>,
@@ -146,6 +157,7 @@ fun ActiveSession.toView(nowMillis: Long) = ActiveWorkout(
     workoutName = workoutName,
     exerciseIndex = exerciseIndex,
     exerciseCount = exerciseCount,
+    exerciseId = exerciseId,
     exerciseName = exerciseName,
     goal = goal,
     sets = sets,

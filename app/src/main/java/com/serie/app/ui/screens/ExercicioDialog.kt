@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.ui.components.SerieButton
 import com.serie.app.ui.components.SerieButtonStyle
@@ -31,30 +33,32 @@ import com.serie.app.ui.theme.elevLg
 import com.serie.app.ui.theme.elevSm
 
 /**
- * Criacao de exercicio personalizado.
+ * Criacao e edicao de exercicio.
  *
- * Pede so o minimo que a biblioteca precisa para listar e filtrar: nome,
- * grupo e equipamento. Series, reps e carga ficam de fora de proposito - sao
- * prescricao do treino, nao propriedade do exercicio, e o mesmo supino pode
- * aparecer com cargas diferentes em dois treinos.
+ * Series, reps e carga continuam de fora: sao prescricao do treino, nao
+ * propriedade do exercicio - o mesmo supino aparece com cargas diferentes em
+ * dois treinos. Ja a descricao e do exercicio, porque uma dica de execucao
+ * vale em qualquer treino onde ele apareca.
  */
 @Composable
-fun CriarExercicioDialog(
+fun ExercicioDialog(
+    draft: LibraryExercise,
+    isNew: Boolean,
     error: String?,
     onDismiss: () -> Unit,
-    onCreate: (name: String, group: MuscleGroup, equipment: String) -> Unit,
+    onSave: (name: String, group: MuscleGroup, equipment: String, notes: String) -> Unit,
 ) {
     val c = Nocturne.colors
-    var name by remember { mutableStateOf("") }
-    var equipment by remember { mutableStateOf("") }
-    var groupIndex by remember { mutableIntStateOf(0) }
     val groups = MuscleGroup.entries
+    var name by remember(draft.id) { mutableStateOf(draft.name) }
+    var equipment by remember(draft.id) { mutableStateOf(draft.equipment) }
+    var notes by remember(draft.id) { mutableStateOf(draft.notes) }
+    var groupIndex by remember(draft.id) { mutableIntStateOf(groups.indexOf(draft.group).coerceAtLeast(0)) }
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // Sombra antes do fundo, contorno depois.
                 .elevLg(Radius.lg)
                 .clip(Radius.lg)
                 .background(c.surface)
@@ -62,7 +66,11 @@ fun CriarExercicioDialog(
                 .padding(Dimens.cardPadding),
             verticalArrangement = Arrangement.spacedBy(Dimens.blockGap),
         ) {
-            Text("Novo exercício", style = Nocturne.type.h2, color = c.text)
+            Text(
+                if (isNew) "Novo exercício" else "Editar exercício",
+                style = Nocturne.type.h2,
+                color = c.text,
+            )
 
             SerieField(
                 value = name,
@@ -94,6 +102,15 @@ fun CriarExercicioDialog(
                 placeholder = "Halteres, barra, polia…",
             )
 
+            SerieField(
+                value = notes,
+                onValueChange = { notes = it },
+                label = "Descrição",
+                placeholder = "Cotovelos junto ao corpo, descer devagar…",
+                singleLine = false,
+                modifier = Modifier.heightIn(min = 88.dp),
+            )
+
             if (error != null) {
                 Text(error, style = Nocturne.type.caption, color = c.accent2)
             }
@@ -109,8 +126,8 @@ fun CriarExercicioDialog(
                     modifier = Modifier.weight(1f),
                 )
                 SerieButton(
-                    label = "Criar",
-                    onClick = { onCreate(name, groups[groupIndex], equipment) },
+                    label = if (isNew) "Criar" else "Salvar",
+                    onClick = { onSave(name, groups[groupIndex], equipment, notes) },
                     enabled = name.isNotBlank(),
                     modifier = Modifier.weight(1f),
                 )

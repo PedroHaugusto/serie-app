@@ -24,6 +24,7 @@ import com.serie.app.ui.screens.CorpoScreen
 import com.serie.app.ui.screens.EditarTreinoScreen
 import com.serie.app.ui.screens.EvolucaoScreen
 import com.serie.app.ui.screens.ExecucaoScreen
+import com.serie.app.ui.screens.HistoricoScreen
 import com.serie.app.ui.screens.HojeScreen
 import com.serie.app.ui.screens.OnboardingScreen
 import com.serie.app.ui.screens.PerfilScreen
@@ -42,6 +43,7 @@ object Routes {
     const val EXECUCAO = "execucao"
     const val RESUMO = "resumo"
     const val CORPO = "corpo"
+    const val HISTORICO = "historico"
 }
 
 /** As quatro rotas que aparecem na barra de abas. */
@@ -126,6 +128,7 @@ fun SerieNavHost(
                                 popUpTo(Routes.HOJE) { inclusive = true }
                             }
                         },
+                        onOpenHistory = { navController.navigate(Routes.HISTORICO) },
                     )
                 }
 
@@ -188,6 +191,14 @@ fun SerieNavHost(
                                 popUpTo(Routes.HOJE) { inclusive = true }
                             }
                         },
+                    )
+                }
+
+                composable(Routes.HISTORICO) {
+                    HistoricoScreen(
+                        state = state,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
                     )
                 }
 

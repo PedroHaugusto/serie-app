@@ -77,6 +77,9 @@ interface LibraryDao {
     @Query("SELECT COUNT(*) FROM library_exercises WHERE LOWER(name) = LOWER(:name)")
     suspend fun countByName(name: String): Int
 
+    @Query("SELECT * FROM library_exercises WHERE LOWER(name) = LOWER(:name) LIMIT 1")
+    suspend fun findByName(name: String): LibraryExerciseEntity?
+
     @Query("SELECT COUNT(*) FROM library_exercises")
     suspend fun count(): Int
 }

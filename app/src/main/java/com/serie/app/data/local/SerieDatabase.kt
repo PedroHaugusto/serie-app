@@ -17,7 +17,7 @@ import androidx.room.RoomDatabase
         SessionEntity::class,
         SessionSetEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class SerieDatabase : RoomDatabase() {

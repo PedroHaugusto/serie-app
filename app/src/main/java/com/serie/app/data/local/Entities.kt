@@ -69,6 +69,8 @@ data class LibraryExerciseEntity(
     val equipment: String,
     /** 0 = veio do catalogo inicial, 1 = criado pelo usuario. */
     val isCustom: Boolean = false,
+    /** Texto livre do usuario: dicas, cuidados, variacoes. */
+    val notes: String = "",
 )
 
 /**
@@ -113,6 +115,7 @@ data class ActiveSessionEntity(
     val workoutName: String,
     val exerciseIndex: Int,
     val exerciseCount: Int,
+    val exerciseId: String,
     val exerciseName: String,
     val goal: String,
     val startedAtMillis: Long,

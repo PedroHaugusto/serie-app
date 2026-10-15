@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.MuscleGroup
@@ -109,6 +110,7 @@ fun BibliotecaScreen(
                         exercise = exercise,
                         picked = exercise.id in state.libraryPicked,
                         onToggle = { viewModel.toggleLibraryPick(exercise.id) },
+                        onEdit = { viewModel.openEditExercise(exercise) },
                         onDelete = { viewModel.deleteCustomExercise(exercise.id) },
                     )
                 }
@@ -126,11 +128,13 @@ fun BibliotecaScreen(
         }
     }
 
-    if (state.creatingExercise) {
-        CriarExercicioDialog(
-            error = state.createExerciseError,
-            onDismiss = viewModel::dismissCreateExercise,
-            onCreate = viewModel::createExercise,
+    state.exerciseDraft?.let { draft ->
+        ExercicioDialog(
+            draft = draft,
+            isNew = state.exerciseDraftIsNew,
+            error = state.exerciseError,
+            onDismiss = viewModel::dismissExerciseDialog,
+            onSave = viewModel::saveExercise,
         )
     }
 }
@@ -140,6 +144,7 @@ private fun LibraryRow(
     exercise: LibraryExercise,
     picked: Boolean,
     onToggle: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val c = Nocturne.colors
@@ -183,17 +188,39 @@ private fun LibraryRow(
                 Text(exercise.name, style = Nocturne.type.itemTitle, color = c.text)
                 if (exercise.isCustom) SerieTag("Meu", style = SerieTagStyle.Accent)
             }
+            Text(
+                "${exercise.group.label} · ${exercise.equipment}",
+                style = Nocturne.type.caption,
+                color = c.textMuted,
+            )
+            if (exercise.notes.isNotBlank()) {
+                Text(
+                    exercise.notes,
+                    style = Nocturne.type.caption,
+                    color = c.textSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(top = 2.dp),
             ) {
+                // Editar vale para qualquer exercicio: a descricao so serve se
+                // puder ser escrita tambem nos do catalogo inicial.
                 Text(
-                    "${exercise.group.label} · ${exercise.equipment}",
+                    if (exercise.notes.isBlank()) "Descrever" else "Editar",
                     style = Nocturne.type.caption,
-                    color = c.textMuted,
+                    color = c.accent,
+                    modifier = Modifier
+                        .clip(Radius.sm)
+                        .clickable(onClick = onEdit)
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                 )
-                // Remover so aparece no que o usuario criou: o catalogo
-                // inicial e compartilhado e nao deveria encolher por engano.
+                // Remover so no que o usuario criou: o catalogo inicial nao
+                // deveria encolher por engano.
                 if (exercise.isCustom) {
                     Text(
                         "Remover",

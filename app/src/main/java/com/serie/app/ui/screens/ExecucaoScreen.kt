@@ -110,6 +110,29 @@ fun ExecucaoScreen(
                 }
             }
 
+            // A descricao do exercicio aparece aqui porque e durante a serie
+            // que a dica e util - nao na biblioteca, onde so se escolhe.
+            val notes = state.library.firstOrNull { it.id == active.exerciseId }?.notes.orEmpty()
+            if (notes.isNotBlank()) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(Radius.md)
+                            .background(c.accentRamp.s900)
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PhIcon(Ph.info, size = 16.dp, tint = c.accent)
+                        Text(
+                            notes,
+                            style = Nocturne.type.bodySmall,
+                            color = c.textSecondary,
+                        )
+                    }
+                }
+            }
+
             item { SetHeaderRow() }
 
             itemsIndexed(active.sets) { index, set ->

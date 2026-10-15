@@ -121,8 +121,10 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             libraryQuery = ui.libraryQuery,
             libraryGroup = ui.libraryGroup,
             libraryPicked = ui.libraryPicked,
-            creatingExercise = ui.creatingExercise,
-            createExerciseError = ui.createExerciseError,
+            exerciseDraft = ui.exerciseDraft,
+            exerciseDraftIsNew = ui.exerciseDraftIsNew,
+            exerciseError = ui.exerciseError,
+            sessionToDelete = ui.sessionToDelete,
             summary = ui.summary,
             effort = ui.effort,
             period = ui.period,
@@ -277,44 +279,69 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             groupOk && queryOk
         }
 
-    fun openCreateExercise() =
-        transient.update { it.copy(creatingExercise = true, createExerciseError = null) }
+    fun openCreateExercise() = transient.update {
+        it.copy(
+            exerciseDraft = LibraryExercise(
+                id = "",
+                name = "",
+                group = MuscleGroup.Peito,
+                equipment = "",
+                isCustom = true,
+            ),
+            exerciseDraftIsNew = true,
+            exerciseError = null,
+        )
+    }
 
-    fun dismissCreateExercise() =
-        transient.update { it.copy(creatingExercise = false, createExerciseError = null) }
+    fun openEditExercise(exercise: LibraryExercise) = transient.update {
+        it.copy(exerciseDraft = exercise, exerciseDraftIsNew = false, exerciseError = null)
+    }
+
+    fun dismissExerciseDialog() =
+        transient.update { it.copy(exerciseDraft = null, exerciseError = null) }
 
     /**
-     * Cria o exercicio e ja o deixa marcado para entrar no treino.
+     * Grava o rascunho do exercicio.
      *
-     * Quem cria um exercicio no meio da montagem de um treino quer usa-lo
-     * agora; obrigar a procura-lo na lista depois seria um passo a toa.
+     * Um exercicio novo ja sai marcado: quem o cria no meio da montagem de um
+     * treino quer usa-lo agora, e obriga-lo a procurar na lista depois seria
+     * um passo a toa.
      */
-    fun createExercise(name: String, group: MuscleGroup, equipment: String) {
+    fun saveExercise(name: String, group: MuscleGroup, equipment: String, notes: String) {
+        val draft = transient.value.exerciseDraft ?: return
+        val isNew = transient.value.exerciseDraftIsNew
         viewModelScope.launch {
-            val created = repository.createExercise(name, group, equipment)
-            if (created == null) {
-                transient.update {
-                    it.copy(
-                        createExerciseError = if (name.isBlank()) {
-                            "Dê um nome ao exercício."
-                        } else {
-                            "Já existe um exercício com esse nome."
-                        }
-                    )
+            if (isNew) {
+                val created = repository.createExercise(name, group, equipment, notes)
+                if (created == null) {
+                    transient.update { it.copy(exerciseError = nameError(name)) }
+                } else {
+                    transient.update {
+                        it.copy(
+                            exerciseDraft = null,
+                            exerciseError = null,
+                            libraryQuery = "",
+                            libraryGroup = 0,
+                            libraryPicked = it.libraryPicked + created.id,
+                        )
+                    }
                 }
             } else {
-                transient.update {
-                    it.copy(
-                        creatingExercise = false,
-                        createExerciseError = null,
-                        libraryQuery = "",
-                        libraryGroup = 0,
-                        libraryPicked = it.libraryPicked + created.id,
-                    )
+                val ok = repository.updateExercise(
+                    draft.copy(name = name, group = group, equipment = equipment, notes = notes)
+                )
+                if (ok) {
+                    transient.update { it.copy(exerciseDraft = null, exerciseError = null) }
+                } else {
+                    transient.update { it.copy(exerciseError = nameError(name)) }
                 }
             }
         }
     }
+
+    private fun nameError(name: String): String =
+        if (name.isBlank()) "Dê um nome ao exercício."
+        else "Já existe um exercício com esse nome."
 
     fun deleteCustomExercise(id: String) {
         transient.update { it.copy(libraryPicked = it.libraryPicked - id) }
@@ -398,6 +425,7 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
                     workoutName = workout.name,
                     exerciseIndex = index,
                     exerciseCount = workout.exercises.size,
+                    exerciseId = exercise?.exerciseId.orEmpty(),
                     exerciseName = exercise?.name ?: workout.name,
                     goal = exercise?.let { ex ->
                         val last = sets.firstOrNull()?.previous ?: "—"
@@ -478,15 +506,13 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             val now = System.currentTimeMillis()
             val snapshot = state.value
 
-            val workout = snapshot.workouts.firstOrNull { it.id == session.workoutId }
-            val exercise = workout?.exercises?.getOrNull(session.exerciseIndex)
-            val libraryEntry = snapshot.library.firstOrNull { it.id == exercise?.exerciseId }
+            val libraryEntry = snapshot.library.firstOrNull { it.id == session.exerciseId }
 
             val completedSets = session.sets.filter { it.done }.mapNotNull { set ->
                 val load = set.load.replace(',', '.').toDoubleOrNull() ?: return@mapNotNull null
                 val reps = set.reps.toIntOrNull() ?: return@mapNotNull null
                 CompletedSet(
-                    exerciseId = exercise?.exerciseId ?: session.workoutId,
+                    exerciseId = session.exerciseId.ifEmpty { session.workoutId },
                     exerciseName = session.exerciseName,
                     muscleGroup = libraryEntry?.group ?: MuscleGroup.Peito,
                     loadKg = load,
@@ -543,6 +569,23 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
     }
 
     /** O esforco e escolhido depois da sessao gravada, entao atualiza o registro. */
+    // --------------------------------------------------------------- historico
+
+    fun askDeleteSession(session: CompletedSession) =
+        transient.update { it.copy(sessionToDelete = session) }
+
+    fun dismissDeleteSession() = transient.update { it.copy(sessionToDelete = null) }
+
+    /**
+     * Apaga a sessao. As series vao junto pelo CASCADE da chave estrangeira,
+     * e as estatisticas se refazem sozinhas porque derivam do historico.
+     */
+    fun confirmDeleteSession() {
+        val id = transient.value.sessionToDelete?.id ?: return
+        transient.update { it.copy(sessionToDelete = null) }
+        viewModelScope.launch { repository.deleteSession(id) }
+    }
+
     fun setEffort(index: Int) {
         val sessionId = transient.value.summary?.sessionId
         transient.update { it.copy(effort = index) }
@@ -635,8 +678,12 @@ private data class TransientState(
     val libraryQuery: String = "",
     val libraryGroup: Int = 0,
     val libraryPicked: Set<String> = emptySet(),
-    val creatingExercise: Boolean = false,
-    val createExerciseError: String? = null,
+    /** Exercicio em edicao; nulo quando o dialogo esta fechado. */
+    val exerciseDraft: LibraryExercise? = null,
+    /** Verdadeiro quando o rascunho e um exercicio novo. */
+    val exerciseDraftIsNew: Boolean = false,
+    val exerciseError: String? = null,
+    val sessionToDelete: CompletedSession? = null,
     val editingProfile: Boolean = false,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,
@@ -655,8 +702,10 @@ data class SerieUiState(
     val libraryQuery: String = "",
     val libraryGroup: Int = 0,
     val libraryPicked: Set<String> = emptySet(),
-    val creatingExercise: Boolean = false,
-    val createExerciseError: String? = null,
+    val exerciseDraft: LibraryExercise? = null,
+    val exerciseDraftIsNew: Boolean = false,
+    val exerciseError: String? = null,
+    val sessionToDelete: CompletedSession? = null,
     val active: ActiveWorkout? = null,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,
