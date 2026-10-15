@@ -18,11 +18,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.serie.app.domain.DayState
 import com.serie.app.domain.Stats
 import com.serie.app.domain.WeekDay
@@ -34,8 +40,10 @@ import com.serie.app.ui.components.Ph
 import com.serie.app.ui.components.PhIcon
 import com.serie.app.ui.components.SectionLabel
 import com.serie.app.ui.components.SerieBlockButton
+import com.serie.app.ui.components.SerieButtonStyle
 import com.serie.app.ui.components.SerieCard
 import com.serie.app.ui.components.SerieDivider
+import com.serie.app.ui.components.SerieField
 import com.serie.app.ui.components.SerieTag
 import com.serie.app.ui.components.SerieTagStyle
 import com.serie.app.ui.components.StatTile
@@ -44,6 +52,7 @@ import com.serie.app.ui.theme.Dimens
 import com.serie.app.ui.theme.Nocturne
 import com.serie.app.ui.theme.Radius
 import com.serie.app.ui.theme.accentGlow
+import com.serie.app.ui.theme.elevLg
 import com.serie.app.ui.theme.elevSm
 
 /** Quantos exercicios o cartao lista antes de resumir o resto. */
@@ -99,37 +108,7 @@ fun HojeScreen(
 
         item { WeekSection(state) }
 
-        item {
-            SerieCard(padding = Dimens.cardPaddingTight) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    StatTile(
-                        icon = Ph.flame,
-                        value = state.streak.toString(),
-                        caption = "dias seguidos",
-                        filled = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    VerticalHairline()
-                    StatTile(
-                        icon = Ph.stack,
-                        value = state.weekVolume,
-                        caption = "volume semana",
-                        modifier = Modifier.weight(1f),
-                    )
-                    VerticalHairline()
-                    StatTile(
-                        icon = Ph.trendUp,
-                        value = state.monthDelta,
-                        caption = "vs. mês passado",
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
+        item { MetricsRow(state, viewModel) }
 
         // Sem recorde no historico, o card simplesmente nao existe: um card
         // vazio sugeriria que o usuario tem um recorde e nao bateu.
@@ -387,13 +366,22 @@ private fun ProgressTrack(fraction: Float, modifier: Modifier = Modifier) {
  */
 @Composable
 private fun WeekSection(state: SerieUiState) {
-    val c = Nocturne.colors
-    val goal = state.preferences.weeklyGoal
-    val done = state.sessionsThisWeek
-    val fraction = if (goal <= 0) 0f else (done.toFloat() / goal).coerceIn(0f, 1f)
+    // Dias treinados sobre dias agendados, nao sessoes sobre a meta do
+    // perfil: a meta e uma intencao solta, e contar sessoes fazia quatro
+    // treinos na mesma quinta virarem "4 de 5" com um unico dia marcado.
+    val trained = Stats.trainedDaysThisWeek(state.week)
+    val scheduled = Stats.scheduledDaysThisWeek(state.workouts)
+    val fraction = if (scheduled <= 0) 0f else (trained.toFloat() / scheduled).coerceIn(0f, 1f)
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionLabel("Esta semana", trailing = "$done de $goal treinos")
+        SectionLabel(
+            "Esta semana",
+            trailing = if (scheduled > 0) {
+                "$trained de " + plural(scheduled, "dia")
+            } else {
+                plural(trained, "dia") + " treinado" + if (trained == 1) "" else "s"
+            },
+        )
         ProgressTrack(fraction)
         Row(
             Modifier.fillMaxWidth(),
@@ -463,5 +451,77 @@ private fun WeekDayCell(day: WeekDay, modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Peso corporal e variacao de volume.
+ *
+ * A sequencia de dias saiu: ela premia constancia, nao progresso, e some
+ * inteira depois de um dia de folga. O peso ocupa o lugar porque e o numero
+ * que o usuario acompanha de fato - e, diferente dos outros, ele so existe se
+ * for registrado, entao a casa convida a isso quando esta vazia.
+ */
+@Composable
+private fun MetricsRow(state: SerieUiState, viewModel: SerieViewModel) {
+    val c = Nocturne.colors
+    val latest = state.bodyWeights.maxByOrNull { it.atMillis }
+    val change = Stats.weightChange(state.bodyWeights, state.today)
+
+    SerieCard(padding = Dimens.cardPaddingTight) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(Radius.md)
+                    .clickable(onClick = viewModel::openRecordWeight)
+                    .padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                PhIcon(Ph.scales, size = 18.dp, tint = c.accent)
+                Text(
+                    latest?.let { Stats.formatWeight(it.kg) + " kg" } ?: "—",
+                    style = Nocturne.type.h2,
+                    color = c.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = when {
+                        latest == null -> "registrar peso"
+                        change == null -> "primeira pesagem"
+                        else -> {
+                            val (delta, days) = change
+                            val sign = if (delta > 0) "+" else "−"
+                            "$sign${Stats.formatWeight(kotlin.math.abs(delta))} kg · ${days}d"
+                        }
+                    },
+                    style = Nocturne.type.caption,
+                    color = if (latest == null) c.accent else c.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            VerticalHairline()
+            StatTile(
+                icon = Ph.trendUp,
+                value = state.monthDelta,
+                caption = "volume vs. mês passado",
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+
+    if (state.recordingWeight) {
+        RegistrarPesoDialog(
+            current = latest?.let { Stats.formatWeight(it.kg) }.orEmpty(),
+            onDismiss = viewModel::dismissRecordWeight,
+            onSave = viewModel::recordWeight,
+        )
     }
 }

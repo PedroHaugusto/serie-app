@@ -9,6 +9,7 @@ import com.serie.app.SerieApplication
 import com.serie.app.data.SeedData
 import com.serie.app.data.SerieRepository
 import com.serie.app.domain.ActiveSession
+import com.serie.app.domain.BodyWeight
 import com.serie.app.domain.ActiveWorkout
 import com.serie.app.domain.CompletedSession
 import com.serie.app.domain.CompletedSet
@@ -69,7 +70,8 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
     private val sessionData = combine(
         repository.activeSession,
         repository.history,
-    ) { active, history -> active to history }
+        repository.bodyWeights,
+    ) { active, history, weights -> Triple(active, history, weights) }
 
     private val persisted = combine(
         repository.workouts,
@@ -85,6 +87,7 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             session = sessions.first,
             profile = profile,
             history = sessions.second,
+            bodyWeights = sessions.third,
         )
     }
 
@@ -97,6 +100,8 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             history = history,
             week = Stats.week(history, db.workouts, today),
             todaySessions = Stats.sessionsOn(history, today),
+            bodyWeights = db.bodyWeights,
+            recordingWeight = ui.recordingWeight,
             streak = Stats.streakDays(history, today),
             weekVolume = Stats.formatVolume(Stats.weekVolumeKg(history, today)),
             sessionsThisWeek = Stats.sessionsThisWeek(history, today),
@@ -722,6 +727,19 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
         it.copy(progressExercise = it.progressExercise + 1)
     }
 
+    // ------------------------------------------------------------------- peso
+
+    fun openRecordWeight() = transient.update { it.copy(recordingWeight = true) }
+
+    fun dismissRecordWeight() = transient.update { it.copy(recordingWeight = false) }
+
+    fun recordWeight(text: String) {
+        val kg = text.replace(',', '.').toDoubleOrNull()
+        if (kg == null || kg <= 0) return
+        transient.update { it.copy(recordingWeight = false) }
+        viewModelScope.launch { repository.recordBodyWeight(kg) }
+    }
+
     // ------------------------------------------------------------------ perfil
 
     fun openEditProfile() = transient.update { it.copy(editingProfile = true) }
@@ -783,6 +801,7 @@ private data class PersistedState(
     val session: ActiveSession?,
     val profile: UserProfile,
     val history: List<CompletedSession>,
+    val bodyWeights: List<BodyWeight>,
 )
 
 /** A parte do estado que vive so enquanto a tela esta aberta. */
@@ -802,6 +821,7 @@ private data class TransientState(
     val exerciseError: String? = null,
     val sessionToDelete: CompletedSession? = null,
     val discardingWorkout: Boolean = false,
+    val recordingWeight: Boolean = false,
     val editingProfile: Boolean = false,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,
@@ -839,6 +859,8 @@ data class SerieUiState(
     val history: List<CompletedSession> = emptyList(),
     val week: List<WeekDay> = emptyList(),
     val todaySessions: List<CompletedSession> = emptyList(),
+    val bodyWeights: List<BodyWeight> = emptyList(),
+    val recordingWeight: Boolean = false,
     val streak: Int = 0,
     val weekVolume: String = "0 kg",
     val sessionsThisWeek: Int = 0,

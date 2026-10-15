@@ -154,6 +154,24 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+/** 6 -> 7: historico de peso corporal. */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `body_weights` (" +
+                "`id` TEXT NOT NULL, " +
+                "`atMillis` INTEGER NOT NULL, " +
+                "`kg` REAL NOT NULL, " +
+                "PRIMARY KEY(`id`))"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_body_weights_atMillis` " +
+                "ON `body_weights` (`atMillis`)"
+        )
+    }
+}
+
 val ALL_MIGRATIONS = arrayOf(
     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+    MIGRATION_6_7,
 )

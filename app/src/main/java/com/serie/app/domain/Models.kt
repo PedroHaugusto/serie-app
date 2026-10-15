@@ -348,3 +348,13 @@ data class CompletedSession(
 
     val date: java.time.LocalDate get() = DateFormat.dateOf(startedAtMillis)
 }
+
+/** Uma pesagem registrada pelo usuario. */
+@Immutable
+data class BodyWeight(
+    val id: String,
+    val atMillis: Long,
+    val kg: Double,
+) {
+    val date: java.time.LocalDate get() = DateFormat.dateOf(atMillis)
+}

@@ -16,8 +16,9 @@ import androidx.room.RoomDatabase
         ProfileEntity::class,
         SessionEntity::class,
         SessionSetEntity::class,
+        BodyWeightEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class SerieDatabase : RoomDatabase() {
@@ -28,6 +29,7 @@ abstract class SerieDatabase : RoomDatabase() {
     abstract fun activeSessionDao(): ActiveSessionDao
     abstract fun profileDao(): ProfileDao
     abstract fun sessionDao(): SessionDao
+    abstract fun bodyWeightDao(): BodyWeightDao
 
     companion object {
         private const val NAME = "serie.db"

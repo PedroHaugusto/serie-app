@@ -93,6 +93,47 @@ object Stats {
         }
     }
 
+    /**
+     * Quantos dias distintos da semana tiveram treino.
+     *
+     * Dias, nao sessoes: treinar duas vezes na quinta nao sao dois dias de
+     * treino, e contar sessoes fazia o progresso da semana saltar sozinho.
+     */
+    fun trainedDaysThisWeek(week: List<WeekDay>): Int =
+        week.count { it.state == DayState.Done }
+
+    /**
+     * Quantos dias da semana tem treino agendado.
+     *
+     * E o denominador honesto do progresso: a meta do perfil e uma intencao,
+     * enquanto o agendamento e o plano que a propria faixa da semana desenha.
+     */
+    fun scheduledDaysThisWeek(workouts: List<Workout>): Int =
+        (0..6).count { day -> workouts.any { it.days.getOrNull(day) == true } }
+
+    /**
+     * Variacao de peso entre a pesagem mais recente e a mais antiga dentro da
+     * janela. Nulo quando nao ha duas pesagens para comparar.
+     */
+    fun weightChange(
+        weights: List<BodyWeight>,
+        today: LocalDate,
+        windowDays: Long = 90,
+    ): Pair<Double, Long>? {
+        if (weights.size < 2) return null
+        val latest = weights.maxByOrNull { it.atMillis } ?: return null
+        val since = today.minusDays(windowDays)
+        val earliest = weights
+            .filter { it.date >= since && it.atMillis < latest.atMillis }
+            .minByOrNull { it.atMillis }
+            ?: return null
+        val days = ChronoUnit.DAYS.between(earliest.date, latest.date)
+        return (latest.kg - earliest.kg) to days
+    }
+
+    /** "78,4" - peso sem a unidade, que a tela escreve a parte. */
+    fun formatWeight(kg: Double): String = "%.1f".format(kg).replace('.', ',')
+
     /** As sessoes concluidas numa data. */
     fun sessionsOn(history: List<CompletedSession>, date: LocalDate): List<CompletedSession> =
         history.filter { it.date == date }

@@ -19,6 +19,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.serie.app.data.SeedData
+import com.serie.app.domain.DateFormat
+import com.serie.app.domain.Stats
+import com.serie.app.ui.SerieUiState
+import com.serie.app.ui.SerieViewModel
 import com.serie.app.domain.BodyMeasure
 import com.serie.app.ui.components.Ph
 import com.serie.app.ui.components.PhIcon
@@ -33,8 +37,15 @@ import com.serie.app.ui.theme.elevSm
 
 /** 09 · Corpo e medidas. */
 @Composable
-fun CorpoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun CorpoScreen(
+    state: SerieUiState,
+    viewModel: SerieViewModel,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = Nocturne.colors
+    val latest = state.bodyWeights.maxByOrNull { it.atMillis }
+    val change = Stats.weightChange(state.bodyWeights, state.today)
 
     LazyColumn(
         modifier = modifier.fillMaxSize().background(c.bg),
@@ -51,7 +62,7 @@ fun CorpoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 navIcon = Ph.arrowLeft,
                 onNav = onBack,
                 actionLabel = "Registrar",
-                onAction = {},
+                onAction = viewModel::openRecordWeight,
             )
         }
 
@@ -60,7 +71,7 @@ fun CorpoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 Text("Peso corporal", style = Nocturne.type.caption, color = c.textMuted)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        SeedData.BODY_WEIGHT,
+                        latest?.let { Stats.formatWeight(it.kg) } ?: "—",
                         style = Nocturne.type.display,
                         color = c.text,
                         modifier = Modifier.alignByBaseline(),
@@ -75,28 +86,27 @@ fun CorpoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         Modifier.padding(start = 10.dp).alignByBaseline(),
                     ) {
                         Text(
-                            SeedData.BODY_WEIGHT_DELTA,
+                            change?.let { (delta, _) ->
+                                (if (delta > 0) "+" else "−") +
+                                    Stats.formatWeight(kotlin.math.abs(delta)) + " kg"
+                            } ?: "—",
                             style = Nocturne.type.itemTitle,
                             color = c.accent,
                         )
                         Text(
-                            SeedData.BODY_WEIGHT_PERIOD,
+                            change?.let { (_, days) -> "em $days dias" }
+                                ?: if (latest == null) "toque em Registrar" else "primeira pesagem",
                             style = Nocturne.type.caption,
                             color = c.textMuted,
                         )
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    PhIcon(Ph.heartbeat, size = 14.dp, tint = c.accent2)
-                    Text(
-                        SeedData.HEALTH_SYNC,
-                        style = Nocturne.type.caption,
-                        color = c.textMuted,
-                    )
-                }
+                Text(
+                    latest?.let { "Registrado em " + DateFormat.shortDate(it.date) }
+                        ?: "Nenhuma pesagem registrada.",
+                    style = Nocturne.type.caption,
+                    color = c.textMuted,
+                )
             }
         }
 
@@ -156,6 +166,14 @@ fun CorpoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+
+    if (state.recordingWeight) {
+        RegistrarPesoDialog(
+            current = latest?.let { Stats.formatWeight(it.kg) }.orEmpty(),
+            onDismiss = viewModel::dismissRecordWeight,
+            onSave = viewModel::recordWeight,
+        )
     }
 }
 

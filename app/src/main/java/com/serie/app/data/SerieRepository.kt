@@ -1,6 +1,8 @@
 package com.serie.app.data
 
 import com.serie.app.data.local.ActiveSessionDao
+import com.serie.app.data.local.BodyWeightDao
+import com.serie.app.data.local.BodyWeightEntity
 import com.serie.app.data.local.ActiveSessionEntity
 import com.serie.app.data.local.ActiveSetEntity
 import com.serie.app.data.local.LibraryDao
@@ -19,9 +21,11 @@ import com.serie.app.data.local.WorkoutEntity
 import com.serie.app.data.local.WorkoutExerciseEntity
 import com.serie.app.data.local.WorkoutWithExercises
 import com.serie.app.domain.ActiveSession
+import com.serie.app.domain.BodyWeight
 import com.serie.app.domain.CompletedSession
 import com.serie.app.domain.CompletedSet
 import com.serie.app.domain.LibraryExercise
+import com.serie.app.domain.DateFormat
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.Preferences
 import com.serie.app.domain.UserProfile
@@ -46,6 +50,7 @@ class SerieRepository(
     private val activeSessionDao: ActiveSessionDao,
     private val profileDao: ProfileDao,
     private val sessionDao: SessionDao,
+    private val bodyWeightDao: BodyWeightDao,
 ) {
 
     constructor(database: SerieDatabase) : this(
@@ -55,6 +60,7 @@ class SerieRepository(
         database.activeSessionDao(),
         database.profileDao(),
         database.sessionDao(),
+        database.bodyWeightDao(),
     )
 
     val workouts: Flow<List<Workout>> =
@@ -94,6 +100,25 @@ class SerieRepository(
         ) { session, sets ->
             session?.toDomain(sets.sortedBy { it.position }.map { it.toDomain() })
         }
+
+    /** Pesagens, da mais recente para a mais antiga. */
+    val bodyWeights: Flow<List<BodyWeight>> =
+        bodyWeightDao.observeAll().map { rows ->
+            rows.map { BodyWeight(it.id, it.atMillis, it.kg) }
+        }
+
+    /**
+     * Registra uma pesagem.
+     *
+     * O id e o dia, nao o instante: pesar duas vezes no mesmo dia corrige o
+     * valor em vez de criar duas linhas que o grafico leria como variacao.
+     */
+    suspend fun recordBodyWeight(kg: Double, atMillis: Long = System.currentTimeMillis()) {
+        val day = DateFormat.dateOf(atMillis)
+        bodyWeightDao.upsert(BodyWeightEntity(id = "bw-$day", atMillis = atMillis, kg = kg))
+    }
+
+    suspend fun deleteBodyWeight(id: String) = bodyWeightDao.delete(id)
 
     /** O historico de treinos concluidos, do mais recente para o mais antigo. */
     val history: Flow<List<CompletedSession>> =

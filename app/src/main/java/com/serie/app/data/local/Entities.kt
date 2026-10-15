@@ -205,3 +205,16 @@ data class SessionWithSets(
     @Relation(parentColumn = "id", entityColumn = "sessionId")
     val sets: List<SessionSetEntity>,
 )
+
+/**
+ * Historico de peso corporal.
+ *
+ * Uma linha por pesagem, e nao um campo unico no perfil: sem as anteriores
+ * nao da para dizer se o peso evoluiu, que e a pergunta que a tela faz.
+ */
+@Entity(tableName = "body_weights", indices = [Index("atMillis")])
+data class BodyWeightEntity(
+    @PrimaryKey val id: String,
+    val atMillis: Long,
+    val kg: Double,
+)

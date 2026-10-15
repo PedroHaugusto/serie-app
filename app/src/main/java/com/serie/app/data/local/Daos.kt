@@ -178,3 +178,16 @@ interface SessionDao {
         insertSets(sets)
     }
 }
+
+@Dao
+interface BodyWeightDao {
+
+    @Query("SELECT * FROM body_weights ORDER BY atMillis DESC")
+    fun observeAll(): Flow<List<BodyWeightEntity>>
+
+    @Upsert
+    suspend fun upsert(weight: BodyWeightEntity)
+
+    @Query("DELETE FROM body_weights WHERE id = :id")
+    suspend fun delete(id: String)
+}

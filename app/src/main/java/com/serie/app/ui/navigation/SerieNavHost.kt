@@ -208,7 +208,11 @@ fun SerieNavHost(
                 }
 
                 composable(Routes.CORPO) {
-                    CorpoScreen(onBack = { navController.popBackStack() })
+                    CorpoScreen(
+                        state = state,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
             }
         }
