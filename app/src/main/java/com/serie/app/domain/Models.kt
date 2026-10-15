@@ -1,0 +1,192 @@
+package com.serie.app.domain
+
+import androidx.compose.runtime.Immutable
+
+/** Como o treino e classificado nos filtros da lista. */
+enum class WorkoutType { Forca, Cardio }
+
+/** Grupo muscular, usado para filtrar a biblioteca e somar volume. */
+enum class MuscleGroup(val label: String) {
+    Peito("Peito"),
+    Costas("Costas"),
+    Pernas("Pernas"),
+    Ombros("Ombros"),
+    Bracos("Braços"),
+    Core("Core"),
+}
+
+/** Um exercicio do catalogo, independente de qualquer treino. */
+@Immutable
+data class LibraryExercise(
+    val id: String,
+    val name: String,
+    val group: MuscleGroup,
+    val equipment: String,
+)
+
+/**
+ * Um exercicio ja dentro de um treino, com a prescricao do usuario.
+ *
+ * [load] e texto e nao numero de proposito: o prototipo preve "corpo" para
+ * peso corporal, e forcar um numero aqui obrigaria a inventar um campo extra
+ * so para esse caso.
+ */
+@Immutable
+data class WorkoutExercise(
+    val id: String,
+    val exerciseId: String,
+    val name: String,
+    val sets: Int,
+    val reps: String,
+    val load: String,
+    val restSeconds: Int,
+) {
+    /** "4 × 8–10 · 70 kg · 90s" - a linha de resumo das listas. */
+    val summary: String get() = "$sets × $reps · $load · ${restSeconds}s"
+}
+
+@Immutable
+data class Workout(
+    val id: String,
+    /** A letra do treino: A, B, C... E a identidade visual dele no app. */
+    val letter: String,
+    val name: String,
+    val type: WorkoutType,
+    /** Dias da semana, de segunda a domingo. */
+    val days: List<Boolean>,
+    val exercises: List<WorkoutExercise>,
+    val estimatedMinutes: Int,
+    val muscleTags: List<String>,
+) {
+    val totalSets: Int get() = exercises.sumOf { it.sets }
+
+    /** "6 exercícios · 55 min · Qua, Sex" */
+    fun subtitle(): String {
+        val dayLabels = listOf("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
+        val active = days.mapIndexedNotNull { i, on -> dayLabels[i].takeIf { on } }
+        val when_ = if (active.isEmpty()) "livre" else active.joinToString(", ")
+        val head = if (type == WorkoutType.Cardio) "Cardio" else "${exercises.size} exercícios"
+        return "$head · $estimatedMinutes min · $when_"
+    }
+}
+
+/** Uma serie registrada durante a execucao. */
+@Immutable
+data class SetEntry(
+    val previous: String,
+    val load: String,
+    val reps: String,
+    val done: Boolean,
+)
+
+/** O estado de um treino em andamento. */
+@Immutable
+data class ActiveWorkout(
+    val workoutId: String,
+    val workoutLetter: String,
+    val workoutName: String,
+    val exerciseIndex: Int,
+    val exerciseCount: Int,
+    val exerciseName: String,
+    val goal: String,
+    val sets: List<SetEntry>,
+    val elapsedSeconds: Int,
+    val restSeconds: Int,
+    val restRunning: Boolean,
+) {
+    /** Indice da proxima serie nao concluida, ou -1 se todas fecharam. */
+    val currentSetIndex: Int get() = sets.indexOfFirst { !it.done }
+}
+
+/** Um recorde pessoal batido. */
+@Immutable
+data class PersonalRecord(
+    val exerciseName: String,
+    val detail: String,
+)
+
+/** O resultado de um treino concluido, exibido no resumo. */
+@Immutable
+data class WorkoutSummary(
+    val workoutName: String,
+    val dateLabel: String,
+    val durationLabel: String,
+    val volumeKg: Int,
+    val volumeDelta: String,
+    val totalSets: Int,
+    val records: List<PersonalRecord>,
+)
+
+/** Como um dia aparece na faixa da semana da tela Hoje. */
+enum class DayState { Done, Today, Planned, Rest }
+
+@Immutable
+data class WeekDay(
+    val label: String,
+    val state: DayState,
+    /** Letra do treino planejado, quando houver. */
+    val plannedLetter: String = "",
+)
+
+/** Uma linha da tabela de medidas corporais. */
+@Immutable
+data class BodyMeasure(
+    val name: String,
+    val before: String,
+    val after: String,
+    val delta: String,
+    /** Se a variacao desejada e para baixo, como na cintura. */
+    val lowerIsBetter: Boolean = false,
+)
+
+/** Um periodo do grafico de evolucao. */
+@Immutable
+data class EvolutionPeriod(
+    val label: String,
+    val volume: String,
+    val delta: String,
+    val axis: List<String>,
+    val bars: List<Int>,
+)
+
+/** A progressao de carga de um exercicio ao longo do tempo. */
+@Immutable
+data class ExerciseProgress(
+    val name: String,
+    val estimated1RM: String,
+    val from: String,
+    val to: String,
+    /** Pontos de 0 a 100 na vertical, do mais antigo ao mais recente. */
+    val points: List<Float>,
+)
+
+@Immutable
+data class MuscleVolume(
+    val name: String,
+    /** Participacao relativa, de 0 a 100, para o tamanho da barra. */
+    val weight: Int,
+    val percent: String,
+)
+
+@Immutable
+data class UserProfile(
+    val name: String,
+    val initial: String,
+    val since: String,
+    val workouts: Int,
+    val streak: Int,
+    val records: Int,
+)
+
+/** Preferencias do usuario, todas editaveis na tela de perfil. */
+@Immutable
+data class Preferences(
+    val weeklyGoal: Int,
+    val useKilograms: Boolean,
+    val darkTheme: Boolean,
+    val remindersOn: Boolean,
+    val reminderLabel: String,
+)
+
+/** Estado de carregamento de uma tela de lista. */
+enum class LoadState { Content, Empty, Loading, Error }
