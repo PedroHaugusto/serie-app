@@ -67,6 +67,8 @@ data class LibraryExerciseEntity(
     /** Nome da constante de MuscleGroup. */
     val muscleGroup: String,
     val equipment: String,
+    /** 0 = veio do catalogo inicial, 1 = criado pelo usuario. */
+    val isCustom: Boolean = false,
 )
 
 /**
@@ -94,4 +96,40 @@ data class WorkoutWithExercises(
     @Embedded val workout: WorkoutEntity,
     @Relation(parentColumn = "id", entityColumn = "workoutId")
     val exercises: List<WorkoutExerciseEntity>,
+)
+
+/**
+ * O treino em andamento, numa linha unica.
+ *
+ * Guardado a cada mudanca para que fechar o app no meio do treino - ou o
+ * Android matar o processo em segundo plano, o que acontece justamente quando
+ * o telefone fica no bolso durante a serie - nao perca o registro.
+ */
+@Entity(tableName = "active_session")
+data class ActiveSessionEntity(
+    @PrimaryKey val id: Int = SINGLE_ROW,
+    val workoutId: String,
+    val workoutLetter: String,
+    val workoutName: String,
+    val exerciseIndex: Int,
+    val exerciseCount: Int,
+    val exerciseName: String,
+    val goal: String,
+    val startedAtMillis: Long,
+    val restEndsAtMillis: Long?,
+    val restRemainingSeconds: Int,
+) {
+    companion object {
+        const val SINGLE_ROW = 1
+    }
+}
+
+@Entity(tableName = "active_sets")
+data class ActiveSetEntity(
+    @PrimaryKey(autoGenerate = true) val uid: Long = 0,
+    val position: Int,
+    val previous: String,
+    val load: String,
+    val reps: String,
+    val done: Boolean,
 )

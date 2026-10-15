@@ -60,14 +60,67 @@ interface WorkoutDao {
 @Dao
 interface LibraryDao {
 
-    @Query("SELECT * FROM library_exercises ORDER BY rowid")
+    /** Os criados pelo usuario vem primeiro: sao os que ele acabou de procurar. */
+    @Query("SELECT * FROM library_exercises ORDER BY isCustom DESC, name")
     fun observeAll(): Flow<List<LibraryExerciseEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(exercises: List<LibraryExerciseEntity>)
 
+    @Upsert
+    suspend fun upsert(exercise: LibraryExerciseEntity)
+
+    @Query("DELETE FROM library_exercises WHERE id = :id AND isCustom = 1")
+    suspend fun deleteCustom(id: String)
+
+    /** Usado para avisar que o nome ja existe antes de criar um duplicado. */
+    @Query("SELECT COUNT(*) FROM library_exercises WHERE LOWER(name) = LOWER(:name)")
+    suspend fun countByName(name: String): Int
+
     @Query("SELECT COUNT(*) FROM library_exercises")
     suspend fun count(): Int
+}
+
+/**
+ * Acesso ao treino em andamento.
+ *
+ * Sessao e series andam juntas - gravar uma sem a outra deixaria o app
+ * reabrindo num estado impossivel - entao as escritas passam por [save], que
+ * e transacional.
+ */
+@Dao
+interface ActiveSessionDao {
+
+    @Query("SELECT * FROM active_session WHERE id = :id")
+    fun observeSession(id: Int = ActiveSessionEntity.SINGLE_ROW): Flow<ActiveSessionEntity?>
+
+    @Query("SELECT * FROM active_sets ORDER BY position")
+    fun observeSets(): Flow<List<ActiveSetEntity>>
+
+    @Upsert
+    suspend fun upsertSession(session: ActiveSessionEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSets(sets: List<ActiveSetEntity>)
+
+    @Query("DELETE FROM active_sets")
+    suspend fun clearSets()
+
+    @Query("DELETE FROM active_session")
+    suspend fun clearSession()
+
+    @Transaction
+    suspend fun save(session: ActiveSessionEntity, sets: List<ActiveSetEntity>) {
+        upsertSession(session)
+        clearSets()
+        insertSets(sets)
+    }
+
+    @Transaction
+    suspend fun clear() {
+        clearSets()
+        clearSession()
+    }
 }
 
 @Dao

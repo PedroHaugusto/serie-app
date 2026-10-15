@@ -22,6 +22,8 @@ data class LibraryExercise(
     val name: String,
     val group: MuscleGroup,
     val equipment: String,
+    /** Criado pelo usuario, em vez de vir do catalogo inicial. */
+    val isCustom: Boolean = false,
 )
 
 /**
@@ -79,7 +81,46 @@ data class SetEntry(
     val done: Boolean,
 )
 
-/** O estado de um treino em andamento. */
+/**
+ * O treino em andamento, como ele e guardado.
+ *
+ * O tempo e ancorado em instantes do relogio, nao em contadores: se o app for
+ * morto no meio do treino e reaberto dez minutos depois, o cronometro precisa
+ * mostrar dez minutos a mais, nao continuar de onde parou. Contador decrescente
+ * so funciona enquanto o processo vive - que e exatamente o que nao da para
+ * assumir na academia.
+ */
+@Immutable
+data class ActiveSession(
+    val workoutId: String,
+    val workoutLetter: String,
+    val workoutName: String,
+    val exerciseIndex: Int,
+    val exerciseCount: Int,
+    val exerciseName: String,
+    val goal: String,
+    val sets: List<SetEntry>,
+    val startedAtMillis: Long,
+    /** Instante em que o descanso termina; nulo quando nao esta correndo. */
+    val restEndsAtMillis: Long?,
+    /** Quanto sobra do descanso enquanto ele esta parado. */
+    val restRemainingSeconds: Int,
+) {
+    fun elapsedSecondsAt(nowMillis: Long): Int =
+        ((nowMillis - startedAtMillis) / 1000).coerceAtLeast(0).toInt()
+
+    fun restSecondsAt(nowMillis: Long): Int = restEndsAtMillis
+        ?.let { ((it - nowMillis + 999) / 1000).coerceAtLeast(0).toInt() }
+        ?: restRemainingSeconds
+
+    fun restRunningAt(nowMillis: Long): Boolean =
+        restEndsAtMillis != null && restEndsAtMillis > nowMillis
+}
+
+/**
+ * O treino em andamento como a tela le: com os tempos ja resolvidos para o
+ * instante atual, para que a UI nao precise saber de relogio.
+ */
 @Immutable
 data class ActiveWorkout(
     val workoutId: String,
@@ -97,6 +138,21 @@ data class ActiveWorkout(
     /** Indice da proxima serie nao concluida, ou -1 se todas fecharam. */
     val currentSetIndex: Int get() = sets.indexOfFirst { !it.done }
 }
+
+/** Resolve a sessao guardada para o instante [nowMillis]. */
+fun ActiveSession.toView(nowMillis: Long) = ActiveWorkout(
+    workoutId = workoutId,
+    workoutLetter = workoutLetter,
+    workoutName = workoutName,
+    exerciseIndex = exerciseIndex,
+    exerciseCount = exerciseCount,
+    exerciseName = exerciseName,
+    goal = goal,
+    sets = sets,
+    elapsedSeconds = elapsedSecondsAt(nowMillis),
+    restSeconds = restSecondsAt(nowMillis),
+    restRunning = restRunningAt(nowMillis),
+)
 
 /** Um recorde pessoal batido. */
 @Immutable

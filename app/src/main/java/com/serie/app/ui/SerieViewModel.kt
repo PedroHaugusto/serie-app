@@ -3,12 +3,12 @@ package com.serie.app.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.serie.app.SerieApplication
 import com.serie.app.data.SeedData
 import com.serie.app.data.SerieRepository
+import com.serie.app.domain.ActiveSession
 import com.serie.app.domain.ActiveWorkout
 import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.MuscleGroup
@@ -19,13 +19,16 @@ import com.serie.app.domain.Workout
 import com.serie.app.domain.WorkoutExercise
 import com.serie.app.domain.WorkoutSummary
 import com.serie.app.domain.WorkoutType
-import kotlinx.coroutines.Job
+import com.serie.app.domain.toView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -41,32 +44,33 @@ private const val REST_DEFAULT = 90
  * o treino que a tela Hoje mostra e o que a execucao roda e o que o resumo
  * fecha. Separar em um por tela obrigaria a sincronizar copias.
  *
- * O estado publicado e a combinacao de duas origens: o que esta no banco
- * (treinos, biblioteca, preferencias) e o que e so de tela (filtros, rascunho
- * em edicao, treino em andamento). Escrever vai sempre para o banco; a volta
- * chega pelos Flows, entao a UI nunca le uma copia otimista que o banco possa
- * nao ter aceitado.
+ * O estado publicado combina o que esta no banco (treinos, biblioteca,
+ * preferencias, treino em andamento) com o que e so de tela (filtros,
+ * rascunho em edicao, dialogos). Escrever vai sempre para o banco; a volta
+ * chega pelos Flows, entao a UI nunca le uma copia otimista.
  */
 class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
 
     /** A parte do estado que nao e persistida. */
     private val transient = MutableStateFlow(TransientState())
 
-    /** O relogio do treino em andamento: cronometro e descanso. */
-    private var tickJob: Job? = null
-
-    val state: StateFlow<SerieUiState> = combine(
+    private val persisted = combine(
         repository.workouts,
         repository.library,
         repository.preferences,
-        transient,
-    ) { workouts, library, preferences, ui ->
+        repository.activeSession,
+    ) { workouts, library, preferences, session ->
+        PersistedState(workouts, library, preferences ?: SeedData.preferences, session)
+    }
+
+    val state: StateFlow<SerieUiState> = combine(persisted, transient) { db, ui ->
         SerieUiState(
-            workouts = workouts,
-            library = library,
-            // Enquanto a primeira carga nao chega, o padrao mantem a tela
-            // coerente em vez de piscar valores vazios.
-            preferences = preferences ?: SeedData.preferences,
+            workouts = db.workouts,
+            library = db.library,
+            preferences = db.preferences,
+            // A sessao guardada so vira numero de cronometro aqui, resolvida
+            // contra o tique atual.
+            active = db.session?.toView(ui.nowMillis),
             workoutFilter = ui.workoutFilter,
             draft = ui.draft,
             draftIsNew = ui.draftIsNew,
@@ -74,7 +78,8 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             libraryQuery = ui.libraryQuery,
             libraryGroup = ui.libraryGroup,
             libraryPicked = ui.libraryPicked,
-            active = ui.active,
+            creatingExercise = ui.creatingExercise,
+            createExerciseError = ui.createExerciseError,
             summary = ui.summary,
             effort = ui.effort,
             period = ui.period,
@@ -88,6 +93,28 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
 
     init {
         viewModelScope.launch { repository.seedIfFirstRun() }
+        startClock()
+    }
+
+    /**
+     * O relogio so corre enquanto existe treino em andamento.
+     *
+     * Ele nao decrementa nada: apenas publica o instante atual, e a sessao
+     * resolve cronometro e descanso contra ele. Por isso o tempo continua
+     * correto mesmo que o app tenha passado meia hora morto.
+     */
+    private fun startClock() {
+        viewModelScope.launch {
+            repository.activeSession
+                .map { it != null }
+                .distinctUntilChanged()
+                .collectLatest { hasSession ->
+                    while (hasSession && isActive) {
+                        transient.update { it.copy(nowMillis = System.currentTimeMillis()) }
+                        delay(1000)
+                    }
+                }
+        }
     }
 
     // ---------------------------------------------------------------- treinos
@@ -207,6 +234,50 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             groupOk && queryOk
         }
 
+    fun openCreateExercise() =
+        transient.update { it.copy(creatingExercise = true, createExerciseError = null) }
+
+    fun dismissCreateExercise() =
+        transient.update { it.copy(creatingExercise = false, createExerciseError = null) }
+
+    /**
+     * Cria o exercicio e ja o deixa marcado para entrar no treino.
+     *
+     * Quem cria um exercicio no meio da montagem de um treino quer usa-lo
+     * agora; obrigar a procura-lo na lista depois seria um passo a toa.
+     */
+    fun createExercise(name: String, group: MuscleGroup, equipment: String) {
+        viewModelScope.launch {
+            val created = repository.createExercise(name, group, equipment)
+            if (created == null) {
+                transient.update {
+                    it.copy(
+                        createExerciseError = if (name.isBlank()) {
+                            "Dê um nome ao exercício."
+                        } else {
+                            "Já existe um exercício com esse nome."
+                        }
+                    )
+                }
+            } else {
+                transient.update {
+                    it.copy(
+                        creatingExercise = false,
+                        createExerciseError = null,
+                        libraryQuery = "",
+                        libraryGroup = 0,
+                        libraryPicked = it.libraryPicked + created.id,
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteCustomExercise(id: String) {
+        transient.update { it.copy(libraryPicked = it.libraryPicked - id) }
+        viewModelScope.launch { repository.deleteCustomExercise(id) }
+    }
+
     /** Leva os exercicios marcados para o rascunho e limpa a selecao. */
     fun confirmLibrarySelection() {
         val s = state.value
@@ -233,26 +304,35 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
 
     // --------------------------------------------------------------- execucao
 
-    /** Comeca o treino e liga o relogio. */
+    /**
+     * Comeca o treino - ou retoma o que ja estava em andamento.
+     *
+     * Retomar e o caso comum depois do app ser morto no bolso: recomecar do
+     * zero aqui apagaria as series que o usuario ja tinha registrado.
+     */
     fun startWorkout(workoutId: String) {
-        val workout = state.value.workouts.firstOrNull { it.id == workoutId } ?: return
-        val index = if (workout.exercises.size > 1) 1 else 0
-        val exercise = workout.exercises.getOrNull(index)
-        val sets = exercise?.let { ex ->
-            List(ex.sets) { i ->
-                val seed = SeedData.activeSets.getOrNull(i)
-                SetEntry(
-                    previous = seed?.first ?: "—",
-                    load = seed?.second ?: ex.load.filter { it.isDigit() || it == ',' }.ifBlank { "0" },
-                    reps = seed?.third ?: ex.reps.takeWhile { it.isDigit() }.ifBlank { "0" },
-                    done = i < 2,
-                )
-            }
-        } ?: emptyList()
+        viewModelScope.launch {
+            val existing = repository.activeSession.first()
+            if (existing != null) return@launch
 
-        transient.update {
-            it.copy(
-                active = ActiveWorkout(
+            val workout = state.value.workouts.firstOrNull { it.id == workoutId } ?: return@launch
+            val index = if (workout.exercises.size > 1) 1 else 0
+            val exercise = workout.exercises.getOrNull(index)
+            val sets = exercise?.let { ex ->
+                List(ex.sets) { i ->
+                    val seed = SeedData.activeSets.getOrNull(i)
+                    SetEntry(
+                        previous = seed?.first ?: "—",
+                        load = seed?.second
+                            ?: ex.load.filter { it.isDigit() || it == ',' }.ifBlank { "0" },
+                        reps = seed?.third ?: ex.reps.takeWhile { it.isDigit() }.ifBlank { "0" },
+                        done = i < 2,
+                    )
+                }
+            } ?: emptyList()
+
+            repository.saveActiveSession(
+                ActiveSession(
                     workoutId = workout.id,
                     workoutLetter = workout.letter,
                     workoutName = workout.name,
@@ -263,103 +343,92 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
                         "Meta ${ex.sets} × ${ex.reps} · última vez ${sets.firstOrNull()?.previous ?: "—"}"
                     } ?: "",
                     sets = sets,
-                    elapsedSeconds = 0,
-                    restSeconds = REST_DEFAULT,
-                    restRunning = false,
+                    startedAtMillis = System.currentTimeMillis(),
+                    restEndsAtMillis = null,
+                    restRemainingSeconds = REST_DEFAULT,
                 )
             )
         }
-        startTicking()
     }
 
-    private fun startTicking() {
-        tickJob?.cancel()
-        tickJob = viewModelScope.launch {
-            while (isActive) {
-                delay(1000)
-                transient.update { s ->
-                    val a = s.active ?: return@update s
-                    val restDone = a.restRunning && a.restSeconds <= 1
-                    s.copy(
-                        active = a.copy(
-                            elapsedSeconds = a.elapsedSeconds + 1,
-                            restSeconds = if (a.restRunning) (a.restSeconds - 1).coerceAtLeast(0) else a.restSeconds,
-                            restRunning = a.restRunning && !restDone,
-                        )
-                    )
-                }
-            }
-        }
-    }
+    fun updateSetLoad(index: Int, load: String) = updateSet(index) { it.copy(load = load) }
 
-    fun updateSetLoad(index: Int, load: String) = updateActiveSet(index) { it.copy(load = load) }
-
-    fun updateSetReps(index: Int, reps: String) = updateActiveSet(index) { it.copy(reps = reps) }
+    fun updateSetReps(index: Int, reps: String) = updateSet(index) { it.copy(reps = reps) }
 
     /** Fechar uma serie dispara o descanso; reabrir nao o cancela. */
-    fun toggleSetDone(index: Int) = transient.update { s ->
-        val a = s.active ?: return@update s
-        val nowDone = !a.sets[index].done
+    fun toggleSetDone(index: Int) = withSession { s ->
+        val nowDone = !s.sets[index].done
         s.copy(
-            active = a.copy(
-                sets = a.sets.mapIndexed { i, set -> if (i == index) set.copy(done = nowDone) else set },
-                restSeconds = if (nowDone) REST_DEFAULT else a.restSeconds,
-                restRunning = nowDone || a.restRunning,
+            sets = s.sets.mapIndexed { i, set -> if (i == index) set.copy(done = nowDone) else set },
+            restEndsAtMillis = if (nowDone) {
+                System.currentTimeMillis() + REST_DEFAULT * 1000L
+            } else {
+                s.restEndsAtMillis
+            },
+            restRemainingSeconds = if (nowDone) REST_DEFAULT else s.restRemainingSeconds,
+        )
+    }
+
+    fun addSet() = withSession { s ->
+        val last = s.sets.lastOrNull()
+        s.copy(
+            sets = s.sets + SetEntry(
+                previous = "—",
+                load = last?.load ?: "0",
+                reps = last?.reps ?: "0",
+                done = false,
             )
         )
     }
 
-    fun addSet() = transient.update { s ->
-        val a = s.active ?: return@update s
-        val last = a.sets.lastOrNull()
-        s.copy(
-            active = a.copy(
-                sets = a.sets + SetEntry(
-                    previous = "—",
-                    load = last?.load ?: "0",
-                    reps = last?.reps ?: "0",
-                    done = false,
-                )
-            )
-        )
+    /** Move o fim do descanso; com ele parado, ajusta o que sobrou. */
+    fun adjustRest(deltaSeconds: Int) = withSession { s ->
+        val now = System.currentTimeMillis()
+        val ends = s.restEndsAtMillis
+        if (ends != null && ends > now) {
+            s.copy(restEndsAtMillis = (ends + deltaSeconds * 1000L).coerceAtLeast(now))
+        } else {
+            s.copy(restRemainingSeconds = (s.restRemainingSeconds + deltaSeconds).coerceAtLeast(0))
+        }
     }
 
-    fun adjustRest(deltaSeconds: Int) = transient.update { s ->
-        val a = s.active ?: return@update s
-        s.copy(active = a.copy(restSeconds = (a.restSeconds + deltaSeconds).coerceAtLeast(0)))
+    private fun updateSet(index: Int, transform: (SetEntry) -> SetEntry) = withSession { s ->
+        s.copy(sets = s.sets.mapIndexed { i, set -> if (i == index) transform(set) else set })
     }
 
-    private fun updateActiveSet(index: Int, transform: (SetEntry) -> SetEntry) = transient.update { s ->
-        val a = s.active ?: return@update s
-        s.copy(active = a.copy(sets = a.sets.mapIndexed { i, set -> if (i == index) transform(set) else set }))
+    private fun withSession(transform: (ActiveSession) -> ActiveSession) {
+        viewModelScope.launch {
+            val current = repository.activeSession.first() ?: return@launch
+            repository.saveActiveSession(transform(current))
+        }
     }
 
     /** Encerra o treino e monta o resumo a partir do que foi registrado. */
     fun finishWorkout() {
-        val a = transient.value.active ?: return
-        tickJob?.cancel()
-        tickJob = null
+        viewModelScope.launch {
+            val session = repository.activeSession.first() ?: return@launch
+            val doneSets = session.sets.count { it.done }
+            val volume = session.sets.filter { it.done }.sumOf { set ->
+                val load = set.load.replace(',', '.').toDoubleOrNull() ?: 0.0
+                val reps = set.reps.toIntOrNull() ?: 0
+                (load * reps).toInt()
+            }
+            val elapsed = session.elapsedSecondsAt(System.currentTimeMillis())
 
-        val doneSets = a.sets.count { it.done }
-        val volume = a.sets.filter { it.done }.sumOf { set ->
-            val load = set.load.replace(',', '.').toDoubleOrNull() ?: 0.0
-            val reps = set.reps.toIntOrNull() ?: 0
-            (load * reps).toInt()
-        }
-
-        transient.update {
-            it.copy(
-                active = null,
-                summary = WorkoutSummary(
-                    workoutName = a.workoutName,
-                    dateLabel = SeedData.TODAY_LABEL.substringBefore(",") + ", 14 out",
-                    durationLabel = formatClock(a.elapsedSeconds),
-                    volumeKg = volume,
-                    volumeDelta = "volume · +8%",
-                    totalSets = doneSets,
-                    records = SeedData.finishedRecords,
-                ),
-            )
+            repository.clearActiveSession()
+            transient.update {
+                it.copy(
+                    summary = WorkoutSummary(
+                        workoutName = session.workoutName,
+                        dateLabel = SeedData.TODAY_LABEL.substringBefore(",") + ", 14 out",
+                        durationLabel = formatClock(elapsed),
+                        volumeKg = volume,
+                        volumeDelta = "volume · +8%",
+                        totalSets = doneSets,
+                        records = SeedData.finishedRecords,
+                    ),
+                )
+            }
         }
     }
 
@@ -399,20 +468,14 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
         }
     }
 
-    override fun onCleared() {
-        tickJob?.cancel()
-        super.onCleared()
-    }
-
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                val app = this[APPLICATION_KEY] as SerieApplication
+                val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
+                        as SerieApplication
                 SerieViewModel(app.repository)
             }
         }
-
-        private val APPLICATION_KEY = ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY
     }
 }
 
@@ -423,8 +486,17 @@ fun formatClock(totalSeconds: Int): String {
     return "%02d:%02d".format(m, s)
 }
 
+/** O que vem do banco. */
+private data class PersistedState(
+    val workouts: List<Workout>,
+    val library: List<LibraryExercise>,
+    val preferences: Preferences,
+    val session: ActiveSession?,
+)
+
 /** A parte do estado que vive so enquanto a tela esta aberta. */
 private data class TransientState(
+    val nowMillis: Long = System.currentTimeMillis(),
     val workoutFilter: Int = 0,
     val draft: Workout? = null,
     val draftIsNew: Boolean = false,
@@ -432,7 +504,8 @@ private data class TransientState(
     val libraryQuery: String = "",
     val libraryGroup: Int = 0,
     val libraryPicked: Set<String> = emptySet(),
-    val active: ActiveWorkout? = null,
+    val creatingExercise: Boolean = false,
+    val createExerciseError: String? = null,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,
     val period: Int = 1,
@@ -450,6 +523,8 @@ data class SerieUiState(
     val libraryQuery: String = "",
     val libraryGroup: Int = 0,
     val libraryPicked: Set<String> = emptySet(),
+    val creatingExercise: Boolean = false,
+    val createExerciseError: String? = null,
     val active: ActiveWorkout? = null,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,

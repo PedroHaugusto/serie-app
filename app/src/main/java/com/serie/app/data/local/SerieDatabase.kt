@@ -11,8 +11,10 @@ import androidx.room.RoomDatabase
         WorkoutExerciseEntity::class,
         LibraryExerciseEntity::class,
         PreferencesEntity::class,
+        ActiveSessionEntity::class,
+        ActiveSetEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class SerieDatabase : RoomDatabase() {
@@ -20,6 +22,7 @@ abstract class SerieDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
     abstract fun libraryDao(): LibraryDao
     abstract fun preferencesDao(): PreferencesDao
+    abstract fun activeSessionDao(): ActiveSessionDao
 
     companion object {
         private const val NAME = "serie.db"
@@ -47,9 +50,10 @@ abstract class SerieDatabase : RoomDatabase() {
             )
                 // Sem fallbackToDestructiveMigration de proposito: apagar os
                 // treinos do usuario a cada mudanca de esquema e exatamente o
-                // problema que este banco existe para resolver. Quando a
-                // versao subir, escrevemos a migracao a partir dos esquemas
+                // problema que este banco existe para resolver. Toda subida de
+                // versao ganha uma migracao escrita a partir dos esquemas
                 // exportados em app/schemas.
+                .addMigrations(*ALL_MIGRATIONS)
                 .build()
     }
 }

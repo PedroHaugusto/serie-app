@@ -2,6 +2,7 @@ package com.serie.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,8 +31,12 @@ import com.serie.app.ui.components.ListRow
 import com.serie.app.ui.components.Ph
 import com.serie.app.ui.components.PhIcon
 import com.serie.app.ui.components.ScreenHeader
+import com.serie.app.ui.components.SerieBlockButton
+import com.serie.app.ui.components.SerieButtonStyle
 import com.serie.app.ui.components.SerieField
 import com.serie.app.ui.components.SerieSegmented
+import com.serie.app.ui.components.SerieTag
+import com.serie.app.ui.components.SerieTagStyle
 import com.serie.app.ui.theme.Dimens
 import com.serie.app.ui.theme.Nocturne
 import com.serie.app.ui.theme.Radius
@@ -86,7 +91,7 @@ fun BibliotecaScreen(
                 title = "Nada para “${state.libraryQuery}”",
                 body = "Confira a grafia ou crie um exercício personalizado.",
                 ctaLabel = "Criar exercício",
-                onCta = {},
+                onCta = viewModel::openCreateExercise,
                 modifier = Modifier.padding(top = 48.dp),
             )
         } else {
@@ -104,10 +109,29 @@ fun BibliotecaScreen(
                         exercise = exercise,
                         picked = exercise.id in state.libraryPicked,
                         onToggle = { viewModel.toggleLibraryPick(exercise.id) },
+                        onDelete = { viewModel.deleteCustomExercise(exercise.id) },
+                    )
+                }
+                item {
+                    SerieBlockButton(
+                        label = "Criar exercício",
+                        onClick = viewModel::openCreateExercise,
+                        style = SerieButtonStyle.Secondary,
+                        leadingIcon = Ph.plus,
+                        height = Dimens.touchTargetMin,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
             }
         }
+    }
+
+    if (state.creatingExercise) {
+        CriarExercicioDialog(
+            error = state.createExerciseError,
+            onDismiss = viewModel::dismissCreateExercise,
+            onCreate = viewModel::createExercise,
+        )
     }
 }
 
@@ -116,6 +140,7 @@ private fun LibraryRow(
     exercise: LibraryExercise,
     picked: Boolean,
     onToggle: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val c = Nocturne.colors
     ListRow(
@@ -151,12 +176,36 @@ private fun LibraryRow(
         },
     ) {
         Column {
-            Text(exercise.name, style = Nocturne.type.itemTitle, color = c.text)
-            Text(
-                "${exercise.group.label} · ${exercise.equipment}",
-                style = Nocturne.type.caption,
-                color = c.textMuted,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(exercise.name, style = Nocturne.type.itemTitle, color = c.text)
+                if (exercise.isCustom) SerieTag("Meu", style = SerieTagStyle.Accent)
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "${exercise.group.label} · ${exercise.equipment}",
+                    style = Nocturne.type.caption,
+                    color = c.textMuted,
+                )
+                // Remover so aparece no que o usuario criou: o catalogo
+                // inicial e compartilhado e nao deveria encolher por engano.
+                if (exercise.isCustom) {
+                    Text(
+                        "Remover",
+                        style = Nocturne.type.caption,
+                        color = c.accent2,
+                        modifier = Modifier
+                            .clip(Radius.sm)
+                            .clickable(onClick = onDelete)
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
+                }
+            }
         }
     }
 }

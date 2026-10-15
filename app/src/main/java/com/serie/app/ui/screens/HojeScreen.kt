@@ -124,8 +124,10 @@ fun HojeScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         today.muscleTags.forEach { SerieTag(it) }
                     }
+                    // Com sessao guardada o rotulo muda: tocar aqui retoma o
+                    // que ja estava registrado em vez de comecar de novo.
                     SerieBlockButton(
-                        label = "Iniciar treino",
+                        label = if (state.active != null) "Continuar treino" else "Iniciar treino",
                         onClick = { onStartWorkout(today.id) },
                         leadingIcon = Ph.play,
                         leadingIconFilled = true,

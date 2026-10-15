@@ -1,5 +1,8 @@
 package com.serie.app.data
 
+import com.serie.app.data.local.ActiveSessionDao
+import com.serie.app.data.local.ActiveSessionEntity
+import com.serie.app.data.local.ActiveSetEntity
 import com.serie.app.data.local.LibraryDao
 import com.serie.app.data.local.LibraryExerciseEntity
 import com.serie.app.data.local.PreferencesDao
@@ -9,13 +12,16 @@ import com.serie.app.data.local.WorkoutDao
 import com.serie.app.data.local.WorkoutEntity
 import com.serie.app.data.local.WorkoutExerciseEntity
 import com.serie.app.data.local.WorkoutWithExercises
+import com.serie.app.domain.ActiveSession
 import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.Preferences
+import com.serie.app.domain.SetEntry
 import com.serie.app.domain.Workout
 import com.serie.app.domain.WorkoutExercise
 import com.serie.app.domain.WorkoutType
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 /**
@@ -28,12 +34,14 @@ class SerieRepository(
     private val workoutDao: WorkoutDao,
     private val libraryDao: LibraryDao,
     private val preferencesDao: PreferencesDao,
+    private val activeSessionDao: ActiveSessionDao,
 ) {
 
     constructor(database: SerieDatabase) : this(
         database.workoutDao(),
         database.libraryDao(),
         database.preferencesDao(),
+        database.activeSessionDao(),
     )
 
     val workouts: Flow<List<Workout>> =
@@ -44,6 +52,55 @@ class SerieRepository(
 
     val preferences: Flow<Preferences?> =
         preferencesDao.observe().map { it?.toDomain() }
+
+    /**
+     * O treino em andamento, se houver.
+     *
+     * Sessao e series vivem em tabelas separadas e sao combinadas aqui, para
+     * que o resto do app veja um objeto so.
+     */
+    val activeSession: Flow<ActiveSession?> =
+        combine(
+            activeSessionDao.observeSession(),
+            activeSessionDao.observeSets(),
+        ) { session, sets ->
+            session?.toDomain(sets.sortedBy { it.position }.map { it.toDomain() })
+        }
+
+    suspend fun saveActiveSession(session: ActiveSession) =
+        activeSessionDao.save(
+            session = session.toEntity(),
+            sets = session.sets.mapIndexed { i, set -> set.toEntity(i) },
+        )
+
+    suspend fun clearActiveSession() = activeSessionDao.clear()
+
+    /**
+     * Cria um exercicio no catalogo.
+     *
+     * Devolve nulo quando ja existe outro com o mesmo nome: duplicar
+     * "Supino reto" deixaria a busca ambigua e o historico de carga dividido
+     * entre dois registros que o usuario enxerga como um so.
+     */
+    suspend fun createExercise(
+        name: String,
+        group: MuscleGroup,
+        equipment: String,
+    ): LibraryExercise? {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || libraryDao.countByName(trimmed) > 0) return null
+        val exercise = LibraryExercise(
+            id = "custom-${System.currentTimeMillis()}",
+            name = trimmed,
+            group = group,
+            equipment = equipment.trim().ifEmpty { "Livre" },
+            isCustom = true,
+        )
+        libraryDao.upsert(exercise.toEntity())
+        return exercise
+    }
+
+    suspend fun deleteCustomExercise(id: String) = libraryDao.deleteCustom(id)
 
     suspend fun saveWorkout(workout: Workout, position: Int) {
         val existing = workoutDao.findById(workout.id)
@@ -134,6 +191,7 @@ private fun LibraryExerciseEntity.toDomain() = LibraryExercise(
     name = name,
     group = runCatching { MuscleGroup.valueOf(muscleGroup) }.getOrDefault(MuscleGroup.Peito),
     equipment = equipment,
+    isCustom = isCustom,
 )
 
 private fun LibraryExercise.toEntity() = LibraryExerciseEntity(
@@ -141,6 +199,49 @@ private fun LibraryExercise.toEntity() = LibraryExerciseEntity(
     name = name,
     muscleGroup = group.name,
     equipment = equipment,
+    isCustom = isCustom,
+)
+
+private fun ActiveSessionEntity.toDomain(sets: List<SetEntry>) = ActiveSession(
+    workoutId = workoutId,
+    workoutLetter = workoutLetter,
+    workoutName = workoutName,
+    exerciseIndex = exerciseIndex,
+    exerciseCount = exerciseCount,
+    exerciseName = exerciseName,
+    goal = goal,
+    sets = sets,
+    startedAtMillis = startedAtMillis,
+    restEndsAtMillis = restEndsAtMillis,
+    restRemainingSeconds = restRemainingSeconds,
+)
+
+private fun ActiveSession.toEntity() = ActiveSessionEntity(
+    workoutId = workoutId,
+    workoutLetter = workoutLetter,
+    workoutName = workoutName,
+    exerciseIndex = exerciseIndex,
+    exerciseCount = exerciseCount,
+    exerciseName = exerciseName,
+    goal = goal,
+    startedAtMillis = startedAtMillis,
+    restEndsAtMillis = restEndsAtMillis,
+    restRemainingSeconds = restRemainingSeconds,
+)
+
+private fun ActiveSetEntity.toDomain() = SetEntry(
+    previous = previous,
+    load = load,
+    reps = reps,
+    done = done,
+)
+
+private fun SetEntry.toEntity(position: Int) = ActiveSetEntity(
+    position = position,
+    previous = previous,
+    load = load,
+    reps = reps,
+    done = done,
 )
 
 private fun PreferencesEntity.toDomain() = Preferences(
