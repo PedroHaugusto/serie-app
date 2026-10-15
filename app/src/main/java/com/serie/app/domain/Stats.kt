@@ -69,12 +69,17 @@ object Stats {
         today: LocalDate,
     ): List<WeekDay> {
         val start = weekStart(today)
-        val doneDays = history.map { it.date }.toSet()
+        // O ultimo treino de cada dia e o que a faixa mostra: treinar duas
+        // vezes no mesmo dia ainda e um dia treinado.
+        val doneByDay = history
+            .sortedBy { it.startedAtMillis }
+            .associate { it.date to it.workoutLetter }
         return (0..6).map { offset ->
             val date = start.plusDays(offset.toLong())
             val scheduled = workouts.firstOrNull { it.days.getOrNull(offset) == true }
+            val doneLetter = doneByDay[date]
             val state = when {
-                date in doneDays -> DayState.Done
+                doneLetter != null -> DayState.Done
                 date == today -> DayState.Today
                 scheduled != null -> DayState.Planned
                 else -> DayState.Rest
@@ -82,10 +87,15 @@ object Stats {
             WeekDay(
                 label = DateFormat.WEEKDAY_INITIALS[offset],
                 state = state,
-                plannedLetter = scheduled?.letter.orEmpty(),
+                letter = doneLetter ?: scheduled?.letter.orEmpty(),
+                isToday = date == today,
             )
         }
     }
+
+    /** As sessoes concluidas numa data. */
+    fun sessionsOn(history: List<CompletedSession>, date: LocalDate): List<CompletedSession> =
+        history.filter { it.date == date }
 
     /** Quantos dias cada periodo do grafico cobre. */
     private fun periodDays(periodIndex: Int): Long = when (periodIndex) {

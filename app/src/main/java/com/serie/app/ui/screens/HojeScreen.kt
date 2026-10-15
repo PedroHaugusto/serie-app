@@ -1,11 +1,14 @@
 package com.serie.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,11 +21,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.serie.app.data.SeedData
 import com.serie.app.domain.DayState
+import com.serie.app.domain.Stats
 import com.serie.app.domain.WeekDay
+import com.serie.app.domain.Workout
 import com.serie.app.ui.SerieUiState
 import com.serie.app.ui.SerieViewModel
 import com.serie.app.ui.components.EmptyState
@@ -31,13 +35,28 @@ import com.serie.app.ui.components.PhIcon
 import com.serie.app.ui.components.SectionLabel
 import com.serie.app.ui.components.SerieBlockButton
 import com.serie.app.ui.components.SerieCard
+import com.serie.app.ui.components.SerieDivider
 import com.serie.app.ui.components.SerieTag
+import com.serie.app.ui.components.SerieTagStyle
 import com.serie.app.ui.components.StatTile
 import com.serie.app.ui.components.VerticalHairline
 import com.serie.app.ui.theme.Dimens
 import com.serie.app.ui.theme.Nocturne
 import com.serie.app.ui.theme.Radius
+import com.serie.app.ui.theme.accentGlow
 import com.serie.app.ui.theme.elevSm
+
+/** Quantos exercicios o cartao lista antes de resumir o resto. */
+private const val PREVIEW_COUNT = 3
+
+/**
+ * "1 exercício" / "6 exercícios".
+ *
+ * Todas as palavras contadas nesta tela terminam em vogal, entao o plural e
+ * sempre um "s" no fim - nao vale a pena uma tabela para isso.
+ */
+private fun plural(count: Int, singular: String): String =
+    "$count $singular" + if (count == 1) "" else "s"
 
 /** 02 · Hoje - a tela que abre o app depois do login. */
 @Composable
@@ -61,36 +80,7 @@ fun HojeScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.blockGapLarge),
     ) {
-        item {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(state.todayLabel, style = Nocturne.type.label, color = c.textMuted)
-                    // Primeiro nome do perfil: com o nome editavel, uma
-                    // saudacao fixa passaria a chamar o usuario de outra pessoa.
-                    Text(
-                        "Bom dia, ${state.profile.name.trim().substringBefore(' ')}",
-                        style = Nocturne.type.h1,
-                        color = c.text,
-                    )
-                }
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(c.accentRamp.s900),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        state.profile.initial,
-                        style = Nocturne.type.itemTitle,
-                        color = c.accent,
-                    )
-                }
-            }
-        }
+        item { Header(state) }
 
         if (today == null) {
             item {
@@ -104,63 +94,10 @@ fun HojeScreen(
                 )
             }
         } else {
-            item {
-                SerieCard(halo = true) {
-                    Text("TREINO DO DIA", style = Nocturne.type.kicker, color = c.accentRamp.s300)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            today.letter,
-                            style = Nocturne.type.display,
-                            color = c.accent,
-                            modifier = Modifier.alignByBaseline(),
-                        )
-                        Text(
-                            today.name,
-                            style = Nocturne.type.h2,
-                            color = c.text,
-                            modifier = Modifier.alignByBaseline(),
-                        )
-                    }
-                    Text(
-                        "${today.exercises.size} exercícios · ${today.totalSets} séries · " +
-                            "~${today.estimatedMinutes} min",
-                        style = Nocturne.type.bodySmall,
-                        color = c.textSecondary,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        today.muscleTags.forEach { SerieTag(it) }
-                    }
-                    // Com sessao guardada o rotulo muda: tocar aqui retoma o
-                    // que ja estava registrado em vez de comecar de novo.
-                    SerieBlockButton(
-                        label = if (state.active != null) "Continuar treino" else "Iniciar treino",
-                        onClick = { onStartWorkout(today.id) },
-                        leadingIcon = Ph.play,
-                        leadingIconFilled = true,
-                        trailingIcon = Ph.arrowRight,
-                        spread = true,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
+            item { TodayCard(state, today, onStartWorkout) }
         }
 
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionLabel(
-                    "Esta semana",
-                    trailing = "${state.sessionsThisWeek} de ${state.preferences.weeklyGoal} treinos",
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    state.week.forEach { day ->
-                        WeekDayCell(day, Modifier.weight(1f))
-                    }
-                }
-            }
-        }
+        item { WeekSection(state) }
 
         item {
             SerieCard(padding = Dimens.cardPaddingTight) {
@@ -216,11 +153,7 @@ fun HojeScreen(
                         contentAlignment = Alignment.Center,
                     ) { PhIcon(Ph.trophy, size = 18.dp, tint = c.accent, filled = true) }
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            record.exerciseName,
-                            style = Nocturne.type.itemTitle,
-                            color = c.text,
-                        )
+                        Text(record.exerciseName, style = Nocturne.type.itemTitle, color = c.text)
                         Text(
                             record.detail,
                             style = Nocturne.type.caption,
@@ -234,43 +167,300 @@ fun HojeScreen(
     }
 }
 
-/** Um dia na faixa da semana: circulo de 34 dp com o estado do dia. */
+@Composable
+private fun Header(state: SerieUiState) {
+    val c = Nocturne.colors
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(state.todayLabel, style = Nocturne.type.label, color = c.textMuted)
+            // Primeiro nome do perfil: com o nome editavel, uma saudacao fixa
+            // passaria a chamar o usuario de outra pessoa.
+            Text(
+                "Bom dia, ${state.profile.name.trim().substringBefore(' ')}",
+                style = Nocturne.type.h1,
+                color = c.text,
+            )
+        }
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(50))
+                .background(c.accentRamp.s900),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(state.profile.initial, style = Nocturne.type.itemTitle, color = c.accent)
+        }
+    }
+}
+
+/**
+ * O cartao do treino do dia.
+ *
+ * Mostra o que vem pela frente - os exercicios, nao so a contagem deles - e em
+ * que ponto o treino esta: nao comecado, em andamento com progresso, ou ja
+ * concluido hoje. Antes o cartao parecia igual nos tres casos.
+ */
+@Composable
+private fun TodayCard(
+    state: SerieUiState,
+    workout: Workout,
+    onStartWorkout: (String) -> Unit,
+) {
+    val c = Nocturne.colors
+    val active = state.active?.takeIf { it.workoutId == workout.id }
+    val doneToday = state.todaySessions.filter { it.workoutId == workout.id }
+
+    SerieCard(halo = true) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("TREINO DO DIA", style = Nocturne.type.kicker, color = c.accentRamp.s300)
+            when {
+                active != null -> SerieTag("Em andamento", style = SerieTagStyle.Accent)
+                doneToday.isNotEmpty() -> SerieTag(
+                    "Concluído hoje",
+                    style = SerieTagStyle.Accent,
+                    icon = Ph.check,
+                )
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                workout.letter,
+                style = Nocturne.type.display,
+                color = c.accent,
+                modifier = Modifier.alignByBaseline(),
+            )
+            Text(
+                workout.name,
+                style = Nocturne.type.h2,
+                color = c.text,
+                modifier = Modifier.alignByBaseline(),
+            )
+        }
+
+        Text(
+            plural(workout.exercises.size, "exercício") + " · " +
+                plural(workout.totalSets, "série") + " · ~${workout.estimatedMinutes} min",
+            style = Nocturne.type.bodySmall,
+            color = c.textSecondary,
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            workout.muscleTags.forEach { SerieTag(it) }
+        }
+
+        if (workout.exercises.isNotEmpty()) {
+            SerieDivider(fade = 16.dp, modifier = Modifier.padding(vertical = 2.dp))
+            // A prescricao de cada exercicio: da para decidir se o treino cabe
+            // agora sem precisar inicia-lo para descobrir o que tem dentro.
+            workout.exercises.take(PREVIEW_COUNT).forEachIndexed { index, exercise ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${index + 1}",
+                        style = Nocturne.type.caption,
+                        color = c.neutral.s500,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        exercise.name,
+                        style = Nocturne.type.bodySmall,
+                        color = c.text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "${exercise.sets} × ${exercise.reps}",
+                        style = Nocturne.type.caption,
+                        color = c.textMuted,
+                    )
+                }
+            }
+            val rest = workout.exercises.size - PREVIEW_COUNT
+            if (rest > 0) {
+                Text(
+                    "+ " + plural(rest, "exercício"),
+                    style = Nocturne.type.caption,
+                    color = c.textMuted,
+                )
+            }
+        }
+
+        if (active != null) {
+            SessionProgress(
+                exerciseIndex = active.exerciseIndex,
+                exerciseCount = active.exerciseCount,
+                doneSets = active.sets.count { it.done },
+                totalSets = workout.totalSets,
+            )
+        } else if (doneToday.isNotEmpty()) {
+            val volume = Stats.formatVolume(doneToday.sumOf { it.volumeKg })
+            val sets = doneToday.sumOf { it.totalSets }
+            Text(
+                plural(sets, "série") + " · $volume registrados hoje",
+                style = Nocturne.type.caption,
+                color = c.accentRamp.s300,
+            )
+        }
+
+        SerieBlockButton(
+            label = when {
+                active != null -> "Continuar treino"
+                doneToday.isNotEmpty() -> "Treinar de novo"
+                else -> "Iniciar treino"
+            },
+            onClick = { onStartWorkout(workout.id) },
+            leadingIcon = Ph.play,
+            leadingIconFilled = true,
+            trailingIcon = Ph.arrowRight,
+            spread = true,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/** Quanto do treino em andamento ja foi registrado. */
+@Composable
+private fun SessionProgress(
+    exerciseIndex: Int,
+    exerciseCount: Int,
+    doneSets: Int,
+    totalSets: Int,
+) {
+    val c = Nocturne.colors
+    val fraction = if (totalSets <= 0) 0f else (doneSets.toFloat() / totalSets).coerceIn(0f, 1f)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                "Exercício ${exerciseIndex + 1} de $exerciseCount",
+                style = Nocturne.type.caption,
+                color = c.accentRamp.s300,
+            )
+            Text(
+                "$doneSets de " + plural(totalSets, "série"),
+                style = Nocturne.type.caption,
+                color = c.textMuted,
+            )
+        }
+        ProgressTrack(fraction)
+    }
+}
+
+/** Trilho de progresso de 6 dp, usado pelo treino em andamento e pela meta. */
+@Composable
+private fun ProgressTrack(fraction: Float, modifier: Modifier = Modifier) {
+    val c = Nocturne.colors
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(c.neutral.s800)
+    ) {
+        if (fraction > 0f) {
+            Box(
+                Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .accentGlow(RoundedCornerShape(3.dp), alpha = 0.45f)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(c.accent)
+            )
+        }
+    }
+}
+
+/**
+ * A semana.
+ *
+ * Cada dia treinado mostra a letra do treino que foi feito, nao um certo
+ * generico: e isso que deixa ler de relance se a semana saiu como planejada.
+ * Hoje ganha um anel proprio, que sobrevive a ja ter treinado.
+ */
+@Composable
+private fun WeekSection(state: SerieUiState) {
+    val c = Nocturne.colors
+    val goal = state.preferences.weeklyGoal
+    val done = state.sessionsThisWeek
+    val fraction = if (goal <= 0) 0f else (done.toFloat() / goal).coerceIn(0f, 1f)
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionLabel("Esta semana", trailing = "$done de $goal treinos")
+        ProgressTrack(fraction)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            state.week.forEach { day ->
+                WeekDayCell(day, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
 @Composable
 private fun WeekDayCell(day: WeekDay, modifier: Modifier = Modifier) {
     val c = Nocturne.colors
+    val shape = RoundedCornerShape(50)
+    val done = day.state == DayState.Done
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(day.label, style = Nocturne.type.caption, color = c.textMuted)
+        Text(
+            day.label,
+            style = Nocturne.type.caption,
+            color = if (day.isToday) c.accent else c.textMuted,
+        )
         Box(
             Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(50))
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .then(if (done) Modifier.accentGlow(shape, alpha = 0.35f) else Modifier)
+                .clip(shape)
                 .background(
                     when (day.state) {
-                        DayState.Done -> c.accentRamp.s900
-                        DayState.Today -> c.accent
-                        else -> c.surface
+                        DayState.Done -> c.accent
+                        DayState.Planned -> c.surface
+                        DayState.Today -> c.accentRamp.s900
+                        DayState.Rest -> c.surface
                     }
                 )
-                .then(if (day.state == DayState.Planned) Modifier.elevSm(RoundedCornerShape(50)) else Modifier),
+                // Hoje mantem o anel mesmo depois de treinado: e a referencia
+                // de onde a semana esta.
+                .then(
+                    if (day.isToday) {
+                        Modifier.border(2.dp, c.accent, shape)
+                    } else {
+                        Modifier.elevSm(shape)
+                    }
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            when (day.state) {
-                DayState.Done -> PhIcon(Ph.check, size = 14.dp, tint = c.accent)
-                DayState.Today -> Text(
-                    day.plannedLetter,
-                    style = Nocturne.type.caption,
+            when {
+                done -> Text(
+                    day.letter.ifEmpty { "✓" },
+                    style = Nocturne.type.itemTitle,
                     color = c.accentRamp.s100,
                 )
-                DayState.Planned -> Text(
-                    day.plannedLetter,
-                    style = Nocturne.type.caption,
-                    color = c.textSecondary,
+
+                day.state == DayState.Rest -> PhIcon(Ph.moon, size = 13.dp, tint = c.neutral.s500)
+
+                else -> Text(
+                    day.letter,
+                    style = Nocturne.type.itemTitle,
+                    color = if (day.isToday) c.accent else c.textSecondary,
                 )
-                DayState.Rest -> PhIcon(Ph.moon, size = 12.dp, tint = c.neutral.s500)
             }
         }
     }

@@ -225,8 +225,14 @@ enum class DayState { Done, Today, Planned, Rest }
 data class WeekDay(
     val label: String,
     val state: DayState,
-    /** Letra do treino planejado, quando houver. */
-    val plannedLetter: String = "",
+    /**
+     * A letra a mostrar no dia: a do treino que foi feito, quando ja houve
+     * treino, ou a do agendado. Mostrar o que foi treinado e o que permite
+     * ler a semana sem abrir o historico.
+     */
+    val letter: String = "",
+    /** O dia e hoje, independente de ja ter treinado. */
+    val isToday: Boolean = false,
 )
 
 /** Uma linha da tabela de medidas corporais. */

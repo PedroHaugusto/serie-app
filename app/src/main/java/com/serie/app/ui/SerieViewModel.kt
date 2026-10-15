@@ -96,6 +96,7 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             todayLabel = DateFormat.longDate(today),
             history = history,
             week = Stats.week(history, db.workouts, today),
+            todaySessions = Stats.sessionsOn(history, today),
             streak = Stats.streakDays(history, today),
             weekVolume = Stats.formatVolume(Stats.weekVolumeKg(history, today)),
             sessionsThisWeek = Stats.sessionsThisWeek(history, today),
@@ -174,8 +175,25 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
         else -> s.workouts
     }
 
-    fun todayWorkout(s: SerieUiState): Workout? =
-        s.workouts.firstOrNull { it.id == SeedData.TODAY_WORKOUT_ID } ?: s.workouts.firstOrNull()
+    /**
+     * O treino agendado para hoje, pelo dia da semana.
+     *
+     * Antes vinha de um id fixo do prototipo, com queda para o primeiro da
+     * lista quando ele nao existia - o que fazia o cartao anunciar um treino
+     * que nao e de hoje, enquanto a faixa da semana dizia outra coisa. Sem
+     * nada agendado, nao ha treino do dia: a tela mostra descanso.
+     */
+    fun todayWorkout(s: SerieUiState): Workout? = scheduledOn(s.workouts, s.today)
+
+    /** O treino marcado para um dia da semana, se houver. */
+    fun scheduledOn(workouts: List<Workout>, date: java.time.LocalDate): Workout? {
+        val dayIndex = date.dayOfWeek.value - 1
+        return workouts.firstOrNull { it.days.getOrNull(dayIndex) == true }
+    }
+
+    /** Este treino esta agendado para hoje? */
+    fun isScheduledToday(s: SerieUiState, workout: Workout): Boolean =
+        workout.days.getOrNull(s.today.dayOfWeek.value - 1) == true
 
     // ----------------------------------------------------------- criar/editar
 
@@ -820,6 +838,7 @@ data class SerieUiState(
     val todayLabel: String = "",
     val history: List<CompletedSession> = emptyList(),
     val week: List<WeekDay> = emptyList(),
+    val todaySessions: List<CompletedSession> = emptyList(),
     val streak: Int = 0,
     val weekVolume: String = "0 kg",
     val sessionsThisWeek: Int = 0,

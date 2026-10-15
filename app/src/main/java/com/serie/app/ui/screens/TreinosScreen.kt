@@ -87,7 +87,7 @@ fun TreinosScreen(
                 items(workouts, key = { it.id }) { workout ->
                     WorkoutRow(
                         workout = workout,
-                        isToday = workout.id == SeedData.TODAY_WORKOUT_ID,
+                        isToday = viewModel.isScheduledToday(state, workout),
                         onClick = { onEditWorkout(workout.id) },
                     )
                 }

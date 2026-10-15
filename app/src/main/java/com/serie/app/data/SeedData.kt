@@ -89,8 +89,6 @@ object SeedData {
         ),
     )
 
-    /** O treino de hoje no prototipo e o B. */
-    const val TODAY_WORKOUT_ID = "w-b"
 
     val readyPrograms = listOf(
         "Push / Pull / Legs" to "6× semana",
