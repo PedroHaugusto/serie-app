@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tokens Nocturne usados fora do Compose (tema de janela, icone). -->
+    <color name="nocturne_bg">#161826</color>
+    <color name="nocturne_accent">#9184D9</color>
+</resources>

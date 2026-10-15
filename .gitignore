@@ -30,3 +30,7 @@ bin/
 # Arquivos de Sistema
 .DS_Store
 Thumbs.db
+# Android
+local.properties
+*.apk
+*.aab

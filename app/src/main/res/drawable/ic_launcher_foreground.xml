@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Halter: barra central ligando dois pares de anilhas. Cabe na zona segura de 66dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#9184D9"
+        android:pathData="M36,50 H72 V58 H36 Z" />
+    <path
+        android:fillColor="#9184D9"
+        android:pathData="M33,47 H39 V61 H33 Z" />
+    <path
+        android:fillColor="#9184D9"
+        android:pathData="M69,47 H75 V61 H69 Z" />
+    <path
+        android:fillColor="#D2CEFD"
+        android:pathData="M26,44 H32 V64 H26 Z" />
+    <path
+        android:fillColor="#D2CEFD"
+        android:pathData="M76,44 H82 V64 H76 Z" />
+</vector>
