@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.serie.app.domain.ProgressionAdvice
 import com.serie.app.domain.SetEntry
 import com.serie.app.ui.SerieUiState
 import com.serie.app.ui.SerieViewModel
@@ -59,6 +60,7 @@ fun ExecucaoScreen(
     val hasPrevious = active.exerciseIndex > 0
     val hasNext = active.exerciseIndex < active.exerciseCount - 1
     val notes = state.library.firstOrNull { it.id == active.exerciseId }?.notes.orEmpty()
+    val advice = state.progressionAdvices.firstOrNull { it.exerciseId == active.exerciseId }
 
     Column(modifier.fillMaxSize().background(c.bg)) {
         TopBar(
@@ -80,7 +82,7 @@ fun ExecucaoScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(Dimens.blockGap),
         ) {
-            item { ExerciseCard(active.exerciseName, active.goal, notes) }
+            item { ExerciseCard(active.exerciseName, active.goal, notes, advice) }
 
             item { SetHeaderRow() }
 
@@ -222,14 +224,34 @@ private fun TopBar(
     }
 }
 
-/** Nome, meta e dica num bloco so, em vez de tres pedacos soltos. */
+/** Nome, meta, sugestao de carga e dica num bloco so. */
 @Composable
-private fun ExerciseCard(name: String, goal: String, notes: String) {
+private fun ExerciseCard(
+    name: String,
+    goal: String,
+    notes: String,
+    advice: ProgressionAdvice?,
+) {
     val c = Nocturne.colors
     SerieCard(padding = Dimens.cardPaddingTight, gap = 6.dp) {
         Text(name, style = Nocturne.type.h1, color = c.text)
         if (goal.isNotBlank()) {
             Text(goal, style = Nocturne.type.bodySmall, color = c.textSecondary)
+        }
+        // A recomendacao vale mais aqui do que na tela de evolucao: e no
+        // momento de montar a barra que ela muda o que o usuario faz.
+        if (advice != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PhIcon(Ph.trendUp, size = 15.dp, tint = c.accent)
+                Text(
+                    advice.actionShort,
+                    style = Nocturne.type.bodySmall,
+                    color = c.accentRamp.s300,
+                )
+            }
         }
         if (notes.isNotBlank()) {
             SerieDivider(fade = 16.dp, modifier = Modifier.padding(vertical = 4.dp))

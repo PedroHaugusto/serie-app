@@ -134,6 +134,112 @@ object Stats {
     /** "78,4" - peso sem a unidade, que a tela escreve a parte. */
     fun formatWeight(kg: Double): String = "%.1f".format(kg).replace('.', ',')
 
+    /**
+     * Variacao de peso dentro de uma janela de dias.
+     *
+     * Compara a pesagem mais recente com a mais antiga da janela. Nulo quando
+     * nao ha duas pesagens dentro dela - sem duas, nao houve variacao medida.
+     */
+    fun weightChangeIn(weights: List<BodyWeight>, today: LocalDate, days: Long): Double? {
+        val latest = weights.maxByOrNull { it.atMillis } ?: return null
+        val since = today.minusDays(days)
+        val earliest = weights
+            .filter { it.date >= since && it.atMillis < latest.atMillis }
+            .minByOrNull { it.atMillis }
+            ?: return null
+        return latest.kg - earliest.kg
+    }
+
+    /** As janelas que a tela de evolucao mostra lado a lado. */
+    val WEIGHT_WINDOWS = listOf(
+        "1 mês" to 30L,
+        "3 meses" to 90L,
+        "6 meses" to 180L,
+        "1 ano" to 365L,
+    )
+
+    /**
+     * Pesagens de uma janela normalizadas entre 0 e 100, da mais antiga para a
+     * mais recente, prontas para desenhar.
+     */
+    fun weightSeries(weights: List<BodyWeight>, today: LocalDate, days: Long): List<Float> {
+        val since = today.minusDays(days)
+        val inWindow = weights.filter { it.date >= since }.sortedBy { it.atMillis }
+        if (inWindow.size < 2) return emptyList()
+        val values = inWindow.map { it.kg }
+        val min = values.min()
+        val max = values.max()
+        val span = max - min
+        return values.map { if (span <= 0.0) 50f else (((it - min) / span) * 80 + 10).toFloat() }
+    }
+
+    // ------------------------------------------------------- progressao dupla
+
+    /** Quanto a carga sobe quando a faixa de repeticoes e fechada. */
+    const val LOAD_STEP_KG = 2.5
+
+    /**
+     * Le a faixa prescrita de um texto livre como "10-12", "8–10" ou "12".
+     *
+     * O editor aceita texto, entao a leitura precisa tolerar tracos diferentes
+     * e espacos. Sem numero nenhum, nao ha faixa e o exercicio fica de fora da
+     * recomendacao em vez de receber um palpite.
+     */
+    fun parseRepRange(text: String): RepRange? {
+        val numbers = Regex("[0-9]+").findAll(text).map { it.value.toInt() }.toList()
+        return when {
+            numbers.isEmpty() -> null
+            numbers.size == 1 -> RepRange(numbers[0], numbers[0])
+            else -> RepRange(minOf(numbers[0], numbers[1]), maxOf(numbers[0], numbers[1]))
+        }
+    }
+
+    /**
+     * Exercicios prontos para subir carga.
+     *
+     * Progressao dupla: so recomenda quando **todas** as series da ultima
+     * sessao fecharam o topo da faixa. Uma serie boa entre tres fracas nao e
+     * progresso, e subir a carga ali faria o usuario regredir na proxima.
+     *
+     * Exercicios sem carga - peso corporal - ficam de fora: neles a
+     * progressao e em repeticoes, nao em quilos, e sugerir "+2,5 kg" seria
+     * um conselho sem acao possivel.
+     */
+    fun progressionAdvices(
+        history: List<CompletedSession>,
+        workouts: List<Workout>,
+    ): List<ProgressionAdvice> {
+        val prescriptions = workouts
+            .flatMap { it.exercises }
+            .associateBy({ it.exerciseId }, { it })
+
+        return prescriptions.values.mapNotNull { prescription ->
+            val range = parseRepRange(prescription.reps) ?: return@mapNotNull null
+
+            val lastSets = history
+                .filter { session -> session.sets.any { it.exerciseId == prescription.exerciseId } }
+                .maxByOrNull { it.startedAtMillis }
+                ?.sets
+                ?.filter { it.exerciseId == prescription.exerciseId }
+                .orEmpty()
+
+            if (lastSets.isEmpty()) return@mapNotNull null
+            if (lastSets.any { it.loadKg <= 0.0 }) return@mapNotNull null
+            if (lastSets.any { it.reps < range.max }) return@mapNotNull null
+
+            val load = lastSets.maxOf { it.loadKg }
+            ProgressionAdvice(
+                exerciseId = prescription.exerciseId,
+                exerciseName = prescription.name,
+                currentLoadKg = load,
+                suggestedLoadKg = load + LOAD_STEP_KG,
+                range = range,
+                achievedReps = lastSets.minOf { it.reps },
+                sets = lastSets.size,
+            )
+        }.sortedBy { it.exerciseName }
+    }
+
     /** As sessoes concluidas numa data. */
     fun sessionsOn(history: List<CompletedSession>, date: LocalDate): List<CompletedSession> =
         history.filter { it.date == date }

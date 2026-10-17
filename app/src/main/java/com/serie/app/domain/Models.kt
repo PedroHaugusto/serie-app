@@ -378,3 +378,62 @@ data class BodyWeight(
 ) {
     val date: java.time.LocalDate get() = DateFormat.dateOf(atMillis)
 }
+
+/**
+ * Faixa de repeticoes prescrita, como "10-12".
+ *
+ * Uma faixa, e nao um numero, porque e nela que a progressao dupla se apoia:
+ * sobe-se de repeticoes dentro da faixa ate fechar o topo, e so entao a carga
+ * aumenta e as repeticoes voltam ao piso.
+ */
+@Immutable
+data class RepRange(val min: Int, val max: Int) {
+    val label: String get() = if (min == max) "$min" else "$min-$max"
+
+    /** Prescricao de um numero so, como "10": nao ha faixa para percorrer. */
+    val isSingle: Boolean get() = min == max
+}
+
+/** Sugestao de subir a carga de um exercicio. */
+@Immutable
+data class ProgressionAdvice(
+    val exerciseId: String,
+    val exerciseName: String,
+    val currentLoadKg: Double,
+    val suggestedLoadKg: Double,
+    val range: RepRange,
+    /** Menor numero de repeticoes entre as series da ultima sessao. */
+    val achievedReps: Int,
+    val sets: Int,
+) {
+    /**
+     * O que fazer na proxima sessao.
+     *
+     * Com faixa, a carga sobe e as repeticoes voltam ao piso para serem
+     * reconquistadas. Com prescricao de um numero so nao ha piso para voltar,
+     * entao o texto pede para manter as repeticoes - mandar "voltar" a um
+     * numero que ja e o unico seria instrucao vazia.
+     */
+    val action: String
+        get() = if (range.isSingle) {
+            "Suba para ${Stats.formatKg(suggestedLoadKg)} e mantenha as ${range.min} reps"
+        } else {
+            "Suba para ${Stats.formatKg(suggestedLoadKg)} e volte a ${range.min} reps"
+        }
+
+    /** A versao curta, para caber ao lado do nome do exercicio. */
+    val actionShort: String
+        get() = "Suba para ${Stats.formatKg(suggestedLoadKg)} · ${range.min} reps"
+
+    /** Por que a recomendacao apareceu. */
+    val reason: String
+        get() {
+            val goal = if (range.isSingle) {
+                "a meta de ${range.label}"
+            } else {
+                "o topo da faixa ${range.label}"
+            }
+            return "Você fechou $achievedReps reps nas $sets séries " +
+                "com ${Stats.formatKg(currentLoadKg)} — $goal."
+        }
+}

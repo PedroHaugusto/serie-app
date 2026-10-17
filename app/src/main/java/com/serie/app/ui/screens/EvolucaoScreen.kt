@@ -23,7 +23,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.serie.app.domain.DateFormat
 import com.serie.app.domain.Stats
 import com.serie.app.domain.ExerciseProgress
 import com.serie.app.ui.SerieUiState
@@ -35,12 +37,14 @@ import com.serie.app.ui.components.ListRow
 import com.serie.app.ui.components.ScreenHeader
 import com.serie.app.ui.components.SectionLabel
 import com.serie.app.ui.components.SerieCard
+import com.serie.app.ui.components.SerieDivider
 import com.serie.app.ui.components.SerieSegmented
 import com.serie.app.ui.components.SerieTag
 import com.serie.app.ui.components.SerieTagStyle
 import com.serie.app.ui.components.VerticalHairline
 import com.serie.app.ui.theme.Dimens
 import com.serie.app.ui.theme.Nocturne
+import com.serie.app.ui.theme.Radius
 import com.serie.app.ui.theme.accentGlow
 import androidx.compose.foundation.Canvas
 
@@ -74,6 +78,10 @@ fun EvolucaoScreen(
                 onAction = onOpenBody,
             )
         }
+
+        if (state.bodyWeights.isNotEmpty()) item { WeightCard(state) }
+
+        if (state.progressionAdvices.isNotEmpty()) item { ProgressionSection(state) }
 
         if (!state.hasEnoughHistory) {
             item {
@@ -288,10 +296,14 @@ private fun VolumeBars(bars: List<Int>, modifier: Modifier = Modifier) {
 
 /** Linha de progressao de carga, com um ponto marcando o valor mais recente. */
 @Composable
-private fun ProgressLine(progress: ExerciseProgress, modifier: Modifier = Modifier) {
+private fun ProgressLine(progress: ExerciseProgress, modifier: Modifier = Modifier) =
+    LineChart(progress.points, modifier)
+
+/** Linha simples sobre pontos ja normalizados de 0 a 100. */
+@Composable
+private fun LineChart(points: List<Float>, modifier: Modifier = Modifier, height: Int = 72) {
     val c = Nocturne.colors
-    Canvas(modifier.fillMaxWidth().height(72.dp)) {
-        val points = progress.points
+    Canvas(modifier.fillMaxWidth().height(height.dp)) {
         if (points.size < 2) return@Canvas
         val stepX = size.width / (points.size - 1)
         fun yFor(v: Float) = size.height - (v / 100f) * size.height
@@ -310,5 +322,125 @@ private fun ProgressLine(progress: ExerciseProgress, modifier: Modifier = Modifi
             radius = 4.dp.toPx(),
             center = Offset(size.width, yFor(points.last())),
         )
+    }
+}
+
+/**
+ * Peso corporal.
+ *
+ * O numero de hoje e grande, e as quatro janelas ficam lado a lado em vez de
+ * presas ao seletor de periodo: a pergunta "estou perdendo peso?" se responde
+ * comparando prazos, nao escolhendo um de cada vez.
+ */
+@Composable
+private fun WeightCard(state: SerieUiState) {
+    val c = Nocturne.colors
+    val latest = state.bodyWeights.maxByOrNull { it.atMillis } ?: return
+    val series = Stats.weightSeries(state.bodyWeights, state.today, 365)
+
+    SerieCard(padding = Dimens.cardPaddingTight) {
+        Text("Peso corporal", style = Nocturne.type.caption, color = c.textMuted)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                Stats.formatWeight(latest.kg),
+                style = Nocturne.type.display,
+                color = c.text,
+                modifier = Modifier.alignByBaseline(),
+            )
+            Text(
+                "kg",
+                style = Nocturne.type.h2,
+                color = c.textMuted,
+                modifier = Modifier.alignByBaseline(),
+            )
+            Text(
+                "em " + DateFormat.shortDate(latest.date),
+                style = Nocturne.type.caption,
+                color = c.textMuted,
+                modifier = Modifier.alignByBaseline(),
+            )
+        }
+
+        if (series.size >= 2) {
+            LineChart(series, Modifier.padding(vertical = 4.dp), height = 56)
+        }
+
+        SerieDivider(fade = 16.dp, modifier = Modifier.padding(vertical = 2.dp))
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Stats.WEIGHT_WINDOWS.forEach { (label, days) ->
+                val delta = Stats.weightChangeIn(state.bodyWeights, state.today, days)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = delta?.let {
+                            (if (it > 0) "+" else "−") + Stats.formatWeight(kotlin.math.abs(it))
+                        } ?: "—",
+                        style = Nocturne.type.itemTitle,
+                        color = if (delta == null) c.neutral.s500 else c.accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(label, style = Nocturne.type.caption, color = c.textMuted, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Exercicios prontos para subir carga.
+ *
+ * Fica acima dos graficos porque e a unica parte da tela que pede uma acao -
+ * o resto e leitura. So aparece quando ha alguma recomendacao.
+ */
+@Composable
+private fun ProgressionSection(state: SerieUiState) {
+    val c = Nocturne.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel(
+            "Pronto para subir carga",
+            trailing = "${state.progressionAdvices.size}",
+        )
+        state.progressionAdvices.forEach { advice ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(Radius.lg)
+                    .background(c.accentRamp.s900)
+                    .padding(Dimens.cardPaddingTight),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PhIcon(Ph.trendUp, size = 16.dp, tint = c.accent)
+                    Text(
+                        advice.exerciseName,
+                        style = Nocturne.type.itemTitle,
+                        color = c.text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    advice.action,
+                    style = Nocturne.type.bodySmall,
+                    color = c.accentRamp.s300,
+                )
+                Text(
+                    advice.reason,
+                    style = Nocturne.type.caption,
+                    color = c.textMuted,
+                )
+            }
+        }
     }
 }

@@ -73,4 +73,6 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     debugImplementation(libs.androidx.ui.tooling)
+
+    testImplementation(libs.junit)
 }

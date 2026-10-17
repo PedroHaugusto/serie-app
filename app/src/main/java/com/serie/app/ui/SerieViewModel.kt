@@ -20,6 +20,7 @@ import com.serie.app.domain.MuscleVolume
 import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.PersonalRecord
+import com.serie.app.domain.ProgressionAdvice
 import com.serie.app.domain.Preferences
 import com.serie.app.domain.SetEntry
 import com.serie.app.domain.Stats
@@ -112,6 +113,7 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             volumeChart = Stats.volumeChart(history, ui.period, today),
             muscleVolumes = Stats.muscleVolumes(history),
             exerciseProgressList = Stats.exerciseProgress(history),
+            progressionAdvices = Stats.progressionAdvices(history, db.workouts),
             workouts = db.workouts,
             library = db.library,
             preferences = db.preferences,
@@ -880,6 +882,7 @@ data class SerieUiState(
     val volumeChart: EvolutionPeriod? = null,
     val muscleVolumes: List<MuscleVolume> = emptyList(),
     val exerciseProgressList: List<ExerciseProgress> = emptyList(),
+    val progressionAdvices: List<ProgressionAdvice> = emptyList(),
 ) {
     /** Abaixo do minimo, a evolucao mostra "poucos dados" em vez de graficos vazios. */
     val hasEnoughHistory: Boolean
