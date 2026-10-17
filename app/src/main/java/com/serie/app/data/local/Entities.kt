@@ -218,3 +218,35 @@ data class BodyWeightEntity(
     val atMillis: Long,
     val kg: Double,
 )
+
+/**
+ * O que o usuario mede.
+ *
+ * Tabela separada das leituras porque o nome e a intencao da medida ("encolher
+ * a cintura e ganho") valem para todas as leituras dela - repetir isso em cada
+ * medicao deixaria o historico contradizer a si mesmo quando o usuario
+ * renomeasse a medida.
+ */
+@Entity(tableName = "measure_types")
+data class MeasureTypeEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val lowerIsBetter: Boolean,
+    val position: Int,
+    val isCustom: Boolean,
+)
+
+/**
+ * Uma medicao, em centimetros.
+ *
+ * Uma linha por medicao, como nas pesagens: a tela de corpo existe para
+ * mostrar a diferenca entre duas datas, e guardar so o valor atual apagaria
+ * justamente a pergunta.
+ */
+@Entity(tableName = "body_measures", indices = [Index("typeId"), Index("atMillis")])
+data class BodyMeasureEntity(
+    @PrimaryKey val id: String,
+    val typeId: String,
+    val atMillis: Long,
+    val cm: Double,
+)

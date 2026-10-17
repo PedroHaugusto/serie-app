@@ -171,7 +171,58 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+/**
+ * Medidas do corpo.
+ *
+ * As quatro medidas padrao sao inseridas aqui, e nao so no seed da primeira
+ * execucao: quem ja usava o app nunca passa pelo seed, e sem elas a tabela de
+ * medidas abriria vazia para justamente quem tem mais historico.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `measure_types` (" +
+                "`id` TEXT NOT NULL, " +
+                "`name` TEXT NOT NULL, " +
+                "`lowerIsBetter` INTEGER NOT NULL, " +
+                "`position` INTEGER NOT NULL, " +
+                "`isCustom` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`id`))"
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `body_measures` (" +
+                "`id` TEXT NOT NULL, " +
+                "`typeId` TEXT NOT NULL, " +
+                "`atMillis` INTEGER NOT NULL, " +
+                "`cm` REAL NOT NULL, " +
+                "PRIMARY KEY(`id`))"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_body_measures_typeId` " +
+                "ON `body_measures` (`typeId`)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_body_measures_atMillis` " +
+                "ON `body_measures` (`atMillis`)"
+        )
+
+        listOf(
+            Triple("mt-braco", "Braço", 0),
+            Triple("mt-peito", "Peito", 0),
+            Triple("mt-cintura", "Cintura", 1),
+            Triple("mt-coxa", "Coxa", 0),
+        ).forEachIndexed { position, (id, name, lowerIsBetter) ->
+            db.execSQL(
+                "INSERT OR IGNORE INTO `measure_types` " +
+                    "(`id`, `name`, `lowerIsBetter`, `position`, `isCustom`) " +
+                    "VALUES (?, ?, ?, ?, 0)",
+                arrayOf<Any>(id, name, lowerIsBetter, position),
+            )
+        }
+    }
+}
+
 val ALL_MIGRATIONS = arrayOf(
     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-    MIGRATION_6_7,
+    MIGRATION_6_7, MIGRATION_7_8,
 )

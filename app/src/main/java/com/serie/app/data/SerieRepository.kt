@@ -3,6 +3,9 @@ package com.serie.app.data
 import com.serie.app.data.local.ActiveSessionDao
 import com.serie.app.data.local.BodyWeightDao
 import com.serie.app.data.local.BodyWeightEntity
+import com.serie.app.data.local.BodyMeasureEntity
+import com.serie.app.data.local.MeasureDao
+import com.serie.app.data.local.MeasureTypeEntity
 import com.serie.app.data.local.ActiveSessionEntity
 import com.serie.app.data.local.ActiveSetEntity
 import com.serie.app.data.local.LibraryDao
@@ -26,6 +29,8 @@ import com.serie.app.domain.CompletedSession
 import com.serie.app.domain.CompletedSet
 import com.serie.app.domain.LibraryExercise
 import com.serie.app.domain.DateFormat
+import com.serie.app.domain.MeasureEntry
+import com.serie.app.domain.MeasureType
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.Preferences
 import com.serie.app.domain.UserProfile
@@ -51,6 +56,7 @@ class SerieRepository(
     private val profileDao: ProfileDao,
     private val sessionDao: SessionDao,
     private val bodyWeightDao: BodyWeightDao,
+    private val measureDao: MeasureDao,
 ) {
 
     constructor(database: SerieDatabase) : this(
@@ -61,6 +67,7 @@ class SerieRepository(
         database.profileDao(),
         database.sessionDao(),
         database.bodyWeightDao(),
+        database.measureDao(),
     )
 
     val workouts: Flow<List<Workout>> =
@@ -119,6 +126,57 @@ class SerieRepository(
     }
 
     suspend fun deleteBodyWeight(id: String) = bodyWeightDao.delete(id)
+
+    /** As medidas acompanhadas, na ordem em que aparecem na tela. */
+    val measureTypes: Flow<List<MeasureType>> =
+        measureDao.observeTypes().map { rows ->
+            rows.map { MeasureType(it.id, it.name, it.lowerIsBetter, it.isCustom) }
+        }
+
+    /** As medicoes, da mais recente para a mais antiga. */
+    val measureEntries: Flow<List<MeasureEntry>> =
+        measureDao.observeEntries().map { rows ->
+            rows.map { MeasureEntry(it.id, it.typeId, it.atMillis, it.cm) }
+        }
+
+    /**
+     * Registra uma medicao.
+     *
+     * Como nas pesagens, o id e o dia: medir de novo no mesmo dia corrige o
+     * valor em vez de criar duas linhas que a tela leria como variacao.
+     */
+    suspend fun recordMeasure(
+        typeId: String,
+        cm: Double,
+        atMillis: Long = System.currentTimeMillis(),
+    ) {
+        val day = DateFormat.dateOf(atMillis)
+        measureDao.upsertEntry(
+            BodyMeasureEntity(
+                id = "bm-$typeId-$day",
+                typeId = typeId,
+                atMillis = atMillis,
+                cm = cm,
+            )
+        )
+    }
+
+    /** Cria uma medida do usuario e devolve o id dela. */
+    suspend fun createMeasureType(name: String, lowerIsBetter: Boolean): String {
+        val id = "mt-custom-" + System.currentTimeMillis()
+        measureDao.upsertType(
+            MeasureTypeEntity(
+                id = id,
+                name = name.trim(),
+                lowerIsBetter = lowerIsBetter,
+                position = measureDao.lastPosition() + 1,
+                isCustom = true,
+            )
+        )
+        return id
+    }
+
+    suspend fun deleteMeasureType(id: String) = measureDao.removeType(id)
 
     /** O historico de treinos concluidos, do mais recente para o mais antigo. */
     val history: Flow<List<CompletedSession>> =
@@ -229,6 +287,17 @@ class SerieRepository(
         preferencesDao.upsert(SeedData.preferences.toEntity())
         profileDao.upsert(
             ProfileEntity(name = SeedData.profile.name, since = SeedData.profile.since)
+        )
+        measureDao.insertTypes(
+            SeedData.measureTypes.mapIndexed { index, type ->
+                MeasureTypeEntity(
+                    id = type.id,
+                    name = type.name,
+                    lowerIsBetter = type.lowerIsBetter,
+                    position = index,
+                    isCustom = false,
+                )
+            }
         )
     }
 }

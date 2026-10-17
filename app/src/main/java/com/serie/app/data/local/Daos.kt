@@ -191,3 +191,43 @@ interface BodyWeightDao {
     @Query("DELETE FROM body_weights WHERE id = :id")
     suspend fun delete(id: String)
 }
+
+@Dao
+interface MeasureDao {
+
+    @Query("SELECT * FROM measure_types ORDER BY position")
+    fun observeTypes(): Flow<List<MeasureTypeEntity>>
+
+    @Query("SELECT * FROM body_measures ORDER BY atMillis DESC")
+    fun observeEntries(): Flow<List<BodyMeasureEntity>>
+
+    @Upsert
+    suspend fun upsertType(type: MeasureTypeEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTypes(types: List<MeasureTypeEntity>)
+
+    @Upsert
+    suspend fun upsertEntry(entry: BodyMeasureEntity)
+
+    @Query("SELECT COALESCE(MAX(position), -1) FROM measure_types")
+    suspend fun lastPosition(): Int
+
+    @Query("DELETE FROM body_measures WHERE typeId = :typeId")
+    suspend fun deleteEntriesOf(typeId: String)
+
+    @Query("DELETE FROM measure_types WHERE id = :typeId")
+    suspend fun deleteType(typeId: String)
+
+    /**
+     * Apaga a medida e o que foi medido nela.
+     *
+     * As leituras nao sobrevivem ao tipo: sem nome e sem intencao elas viram
+     * numeros soltos que nenhuma tela saberia ler.
+     */
+    @Transaction
+    suspend fun removeType(typeId: String) {
+        deleteEntriesOf(typeId)
+        deleteType(typeId)
+    }
+}

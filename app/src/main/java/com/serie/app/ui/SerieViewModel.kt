@@ -18,6 +18,9 @@ import com.serie.app.domain.EvolutionPeriod
 import com.serie.app.domain.ExerciseProgress
 import com.serie.app.domain.MuscleVolume
 import com.serie.app.domain.LibraryExercise
+import com.serie.app.domain.MeasureEntry
+import com.serie.app.domain.MeasureRow
+import com.serie.app.domain.MeasureType
 import com.serie.app.domain.MuscleGroup
 import com.serie.app.domain.PersonalRecord
 import com.serie.app.domain.ProgressionAdvice
@@ -66,29 +69,36 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
     /** A parte do estado que nao e persistida. */
     private val transient = MutableStateFlow(TransientState())
 
-    // Seis fontes nao cabem num combine so (as sobrecargas vao ate cinco),
-    // entao as sessoes entram por um segundo bloco.
-    private val sessionData = combine(
+    // As sobrecargas de combine vao ate cinco fontes, e o banco tem mais que
+    // isso: o que o usuario registra (treinos feitos, peso, medidas) entra
+    // agrupado num bloco so.
+    private val recorded = combine(
         repository.activeSession,
         repository.history,
         repository.bodyWeights,
-    ) { active, history, weights -> Triple(active, history, weights) }
+        repository.measureTypes,
+        repository.measureEntries,
+    ) { active, history, weights, measureTypes, measureEntries ->
+        RecordedData(active, history, weights, measureTypes, measureEntries)
+    }
 
     private val persisted = combine(
         repository.workouts,
         repository.library,
         repository.preferences,
         repository.profile,
-        sessionData,
-    ) { workouts, library, preferences, profile, sessions ->
+        recorded,
+    ) { workouts, library, preferences, profile, recorded ->
         PersistedState(
             workouts = workouts,
             library = library,
             preferences = preferences ?: SeedData.preferences,
-            session = sessions.first,
+            session = recorded.active,
             profile = profile,
-            history = sessions.second,
-            bodyWeights = sessions.third,
+            history = recorded.history,
+            bodyWeights = recorded.weights,
+            measureTypes = recorded.measureTypes,
+            measureEntries = recorded.measureEntries,
         )
     }
 
@@ -103,6 +113,9 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             todaySessions = Stats.sessionsOn(history, today),
             bodyWeights = db.bodyWeights,
             recordingWeight = ui.recordingWeight,
+            measureRows = Stats.measureRows(db.measureTypes, db.measureEntries),
+            editingMeasures = ui.editingMeasures,
+            creatingMeasure = ui.creatingMeasure,
             streak = Stats.streakDays(history, today),
             weekVolume = Stats.formatVolume(Stats.weekVolumeKg(history, today)),
             sessionsThisWeek = Stats.sessionsThisWeek(history, today),
@@ -751,6 +764,45 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
         viewModelScope.launch { repository.recordBodyWeight(kg) }
     }
 
+    // --------------------------------------------------------------- medidas
+
+    fun openEditMeasures() = transient.update { it.copy(editingMeasures = true) }
+
+    fun dismissEditMeasures() =
+        transient.update { it.copy(editingMeasures = false, creatingMeasure = false) }
+
+    /**
+     * Grava as medidas que o usuario preencheu.
+     *
+     * Campo em branco nao e zero: significa "nao medi hoje", e gravar zero
+     * ali inventaria uma variacao enorme na tabela. Por isso so o que tem
+     * numero valido vira medicao.
+     */
+    fun saveMeasures(values: Map<String, String>) {
+        transient.update { it.copy(editingMeasures = false, creatingMeasure = false) }
+        viewModelScope.launch {
+            values.forEach { (typeId, text) ->
+                val cm = text.trim().replace(',', '.').toDoubleOrNull()
+                if (cm != null && cm > 0) repository.recordMeasure(typeId, cm)
+            }
+        }
+    }
+
+    fun openCreateMeasure() = transient.update { it.copy(creatingMeasure = true) }
+
+    fun dismissCreateMeasure() = transient.update { it.copy(creatingMeasure = false) }
+
+    fun createMeasure(name: String, lowerIsBetter: Boolean) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        transient.update { it.copy(creatingMeasure = false) }
+        viewModelScope.launch { repository.createMeasureType(clean, lowerIsBetter) }
+    }
+
+    fun deleteMeasure(typeId: String) {
+        viewModelScope.launch { repository.deleteMeasureType(typeId) }
+    }
+
     // ------------------------------------------------------------------ perfil
 
     fun openEditProfile() = transient.update { it.copy(editingProfile = true) }
@@ -813,6 +865,17 @@ private data class PersistedState(
     val profile: UserProfile,
     val history: List<CompletedSession>,
     val bodyWeights: List<BodyWeight>,
+    val measureTypes: List<MeasureType>,
+    val measureEntries: List<MeasureEntry>,
+)
+
+/** O que o usuario registrou, agrupado para caber num combine. */
+private data class RecordedData(
+    val active: ActiveSession?,
+    val history: List<CompletedSession>,
+    val weights: List<BodyWeight>,
+    val measureTypes: List<MeasureType>,
+    val measureEntries: List<MeasureEntry>,
 )
 
 /** A parte do estado que vive so enquanto a tela esta aberta. */
@@ -833,6 +896,8 @@ private data class TransientState(
     val sessionToDelete: CompletedSession? = null,
     val discardingWorkout: Boolean = false,
     val recordingWeight: Boolean = false,
+    val editingMeasures: Boolean = false,
+    val creatingMeasure: Boolean = false,
     val editingProfile: Boolean = false,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,
@@ -871,7 +936,10 @@ data class SerieUiState(
     val week: List<WeekDay> = emptyList(),
     val todaySessions: List<CompletedSession> = emptyList(),
     val bodyWeights: List<BodyWeight> = emptyList(),
+    val measureRows: List<MeasureRow> = emptyList(),
     val recordingWeight: Boolean = false,
+    val editingMeasures: Boolean = false,
+    val creatingMeasure: Boolean = false,
     val streak: Int = 0,
     val weekVolume: String = "0 kg",
     val sessionsThisWeek: Int = 0,

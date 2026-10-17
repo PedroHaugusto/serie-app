@@ -257,14 +257,55 @@ data class WeekDay(
 
 /** Uma linha da tabela de medidas corporais. */
 @Immutable
-data class BodyMeasure(
+data class MeasureType(
+    val id: String,
     val name: String,
-    val before: String,
-    val after: String,
-    val delta: String,
     /** Se a variacao desejada e para baixo, como na cintura. */
     val lowerIsBetter: Boolean = false,
+    /** Criada pelo usuario, e nao uma das quatro que ja vem no app. */
+    val isCustom: Boolean = false,
 )
+
+/** Uma medicao, em centimetros. */
+@Immutable
+data class MeasureEntry(
+    val id: String,
+    val typeId: String,
+    val atMillis: Long,
+    val cm: Double,
+) {
+    val date: java.time.LocalDate get() = DateFormat.dateOf(atMillis)
+}
+
+/**
+ * Uma linha da tabela de medidas: a ultima medicao e a anterior a ela.
+ *
+ * Guarda as duas medicoes inteiras, e nao so os numeros, porque a tela mostra
+ * as datas - saber que o braco cresceu 1,5 cm so quer dizer alguma coisa junto
+ * com o intervalo em que isso aconteceu.
+ */
+@Immutable
+data class MeasureRow(
+    val type: MeasureType,
+    val latest: MeasureEntry?,
+    val previous: MeasureEntry?,
+) {
+    val deltaCm: Double? =
+        if (latest != null && previous != null) latest.cm - previous.cm else null
+
+    /**
+     * Se a variacao foi na direcao desejada.
+     *
+     * O sinal sozinho nao diz: encolher a cintura e ganho, encolher o braco
+     * nao. Nulo quando nao houve variacao medida ou quando ela foi zero.
+     */
+    val improved: Boolean?
+        get() {
+            val delta = deltaCm ?: return null
+            if (delta == 0.0) return null
+            return if (type.lowerIsBetter) delta < 0 else delta > 0
+        }
+}
 
 /** Um periodo do grafico de evolucao. */
 @Immutable

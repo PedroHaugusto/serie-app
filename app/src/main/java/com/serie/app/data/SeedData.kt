@@ -1,6 +1,6 @@
 package com.serie.app.data
 
-import com.serie.app.domain.BodyMeasure
+import com.serie.app.domain.MeasureType
 import com.serie.app.domain.DayState
 import com.serie.app.domain.EvolutionPeriod
 import com.serie.app.domain.ExerciseProgress
@@ -101,14 +101,16 @@ object SeedData {
     const val BODY_WEIGHT_PERIOD = "em 90 dias"
     const val HEALTH_SYNC = "Sincronizado com Health Connect · hoje 07:12"
 
-    val measures: List<BodyMeasure> = listOf(
-        BodyMeasure("Braço", "36,0", "37,5", "+1,5"),
-        BodyMeasure("Peito", "101", "103", "+2,0"),
-        BodyMeasure("Cintura", "86,0", "82,5", "−3,5", lowerIsBetter = true),
-        BodyMeasure("Coxa", "57,0", "58,5", "+1,5"),
+    /**
+     * As medidas que o app ja traz. O usuario pode criar outras, e estas
+     * comecam sem nenhuma medicao - a tabela mostra tracos ate ele medir.
+     */
+    val measureTypes: List<MeasureType> = listOf(
+        MeasureType("mt-braco", "Braço"),
+        MeasureType("mt-peito", "Peito"),
+        MeasureType("mt-cintura", "Cintura", lowerIsBetter = true),
+        MeasureType("mt-coxa", "Coxa"),
     )
-
-    val progressPhotos = listOf("14 jul · frente", "14 out · frente")
 
     val profile = UserProfile(
         name = "Rafael Lima",

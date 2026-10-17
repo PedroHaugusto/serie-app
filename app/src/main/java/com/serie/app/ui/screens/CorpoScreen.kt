@@ -2,10 +2,8 @@ package com.serie.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,25 +13,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.serie.app.data.SeedData
 import com.serie.app.domain.DateFormat
+import com.serie.app.domain.MeasureRow
 import com.serie.app.domain.Stats
 import com.serie.app.ui.SerieUiState
 import com.serie.app.ui.SerieViewModel
-import com.serie.app.domain.BodyMeasure
 import com.serie.app.ui.components.Ph
-import com.serie.app.ui.components.PhIcon
+import com.serie.app.ui.components.SerieBlockButton
+import com.serie.app.ui.components.SerieButtonStyle
 import com.serie.app.ui.components.ScreenHeader
 import com.serie.app.ui.components.SectionLabel
 import com.serie.app.ui.components.SerieCard
 import com.serie.app.ui.components.SerieDivider
 import com.serie.app.ui.theme.Dimens
 import com.serie.app.ui.theme.Nocturne
-import com.serie.app.ui.theme.Radius
-import com.serie.app.ui.theme.elevSm
 
 /** 09 · Corpo e medidas. */
 @Composable
@@ -46,6 +41,7 @@ fun CorpoScreen(
     val c = Nocturne.colors
     val latest = state.bodyWeights.maxByOrNull { it.atMillis }
     val change = Stats.weightChange(state.bodyWeights, state.today)
+    val lastMeasured = state.measureRows.mapNotNull { it.latest }.maxByOrNull { it.atMillis }
 
     LazyColumn(
         modifier = modifier.fillMaxSize().background(c.bg),
@@ -61,7 +57,7 @@ fun CorpoScreen(
                 title = "Corpo",
                 navIcon = Ph.arrowLeft,
                 onNav = onBack,
-                actionLabel = "Registrar",
+                actionLabel = "Pesar",
                 onAction = viewModel::openRecordWeight,
             )
         }
@@ -95,7 +91,7 @@ fun CorpoScreen(
                         )
                         Text(
                             change?.let { (_, days) -> "em $days dias" }
-                                ?: if (latest == null) "toque em Registrar" else "primeira pesagem",
+                                ?: if (latest == null) "toque em Pesar" else "primeira pesagem",
                             style = Nocturne.type.caption,
                             color = c.textMuted,
                         )
@@ -111,60 +107,41 @@ fun CorpoScreen(
         }
 
         item {
+            SectionLabel(
+                "Medidas",
+                trailing = lastMeasured
+                    ?.let { "última em " + DateFormat.shortDate(it.date) }
+                    ?: "nenhuma ainda",
+            )
+        }
+
+        item {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(
                     Modifier.fillMaxWidth().padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     TableHead("Medida (cm)", Modifier.weight(1f), TextAlign.Start)
-                    TableHead("Jul", Modifier.width(52.dp), TextAlign.End)
-                    TableHead("Out", Modifier.width(52.dp), TextAlign.End)
+                    TableHead("Ant.", Modifier.width(52.dp), TextAlign.End)
+                    TableHead("Atual", Modifier.width(52.dp), TextAlign.End)
                     TableHead("Δ", Modifier.width(52.dp), TextAlign.End)
                 }
                 SerieDivider(fade = 24.dp)
-                SeedData.measures.forEach { measure ->
-                    MeasureRow(measure)
+                state.measureRows.forEach { row ->
+                    MeasureTableRow(row)
                     SerieDivider(fade = 24.dp)
                 }
             }
         }
 
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionLabel("Fotos de progresso", trailing = "Comparar")
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SeedData.progressPhotos.forEach { label ->
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(0.75f)
-                                    .clip(Radius.lg)
-                                    .background(c.surface)
-                                    .elevSm(Radius.lg),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                PhIcon(Ph.image, size = 26.dp, tint = c.neutral.s500)
-                            }
-                            Text(label, style = Nocturne.type.caption, color = c.textMuted)
-                        }
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    PhIcon(Ph.lockSimple, size = 13.dp, tint = c.textMuted)
-                    Text(
-                        "Fotos ficam só no seu aparelho.",
-                        style = Nocturne.type.caption,
-                        color = c.textMuted,
-                    )
-                }
-            }
+            SerieBlockButton(
+                label = "Atualizar medidas",
+                onClick = viewModel::openEditMeasures,
+                style = SerieButtonStyle.Secondary,
+                leadingIcon = Ph.plus,
+                height = Dimens.touchTargetMin,
+            )
         }
     }
 
@@ -173,6 +150,23 @@ fun CorpoScreen(
             current = latest?.let { Stats.formatWeight(it.kg) }.orEmpty(),
             onDismiss = viewModel::dismissRecordWeight,
             onSave = viewModel::recordWeight,
+        )
+    }
+
+    if (state.editingMeasures) {
+        RegistrarMedidasDialog(
+            rows = state.measureRows,
+            onDismiss = viewModel::dismissEditMeasures,
+            onSave = viewModel::saveMeasures,
+            onCreate = viewModel::openCreateMeasure,
+            onDelete = viewModel::deleteMeasure,
+        )
+    }
+
+    if (state.creatingMeasure) {
+        NovaMedidaDialog(
+            onDismiss = viewModel::dismissCreateMeasure,
+            onCreate = viewModel::createMeasure,
         )
     }
 }
@@ -189,41 +183,50 @@ private fun TableHead(text: String, modifier: Modifier, align: TextAlign) {
 }
 
 @Composable
-private fun MeasureRow(measure: BodyMeasure) {
+private fun MeasureTableRow(row: MeasureRow) {
     val c = Nocturne.colors
-    // Encolher a cintura e ganho; encolher o braco nao. O sinal sozinho nao
-    // diz se a variacao foi boa, entao a cor vem da intencao da medida.
-    val improved = if (measure.lowerIsBetter) {
-        measure.delta.startsWith("−")
-    } else {
-        measure.delta.startsWith("+")
-    }
+    val delta = row.deltaCm
     Row(
         Modifier.fillMaxWidth().padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(measure.name, style = Nocturne.type.bodySmall, color = c.text, modifier = Modifier.weight(1f))
-        Text(
-            measure.before,
-            style = Nocturne.type.bodySmall,
-            color = c.textMuted,
-            modifier = Modifier.width(52.dp),
-            textAlign = TextAlign.End,
-        )
-        Text(
-            measure.after,
-            style = Nocturne.type.bodySmall,
-            color = c.text,
-            modifier = Modifier.width(52.dp),
-            textAlign = TextAlign.End,
-        )
-        Text(
-            measure.delta,
-            style = Nocturne.type.bodySmall,
-            color = if (improved) c.accent else c.textSecondary,
-            modifier = Modifier.width(52.dp),
-            textAlign = TextAlign.End,
+        Column(Modifier.weight(1f)) {
+            Text(row.type.name, style = Nocturne.type.bodySmall, color = c.text)
+            // O intervalo so aparece quando ha dois pontos: "+1,5 cm" sozinho
+            // nao diz se foi num mes ou num ano.
+            if (row.previous != null && row.latest != null) {
+                Text(
+                    DateFormat.shortDate(row.previous.date) + " → " +
+                        DateFormat.shortDate(row.latest.date),
+                    style = Nocturne.type.caption,
+                    color = c.textMuted,
+                )
+            }
+        }
+        Cell(row.previous?.let { Stats.formatCm(it.cm) }, c.textMuted)
+        Cell(row.latest?.let { Stats.formatCm(it.cm) }, c.text)
+        Cell(
+            text = delta?.let {
+                (if (it > 0) "+" else if (it < 0) "−" else "") +
+                    Stats.formatCm(kotlin.math.abs(it))
+            },
+            color = when (row.improved) {
+                true -> c.accent
+                false -> c.textSecondary
+                null -> c.textMuted
+            },
         )
     }
+}
+
+@Composable
+private fun Cell(text: String?, color: androidx.compose.ui.graphics.Color) {
+    Text(
+        text ?: "—",
+        style = Nocturne.type.bodySmall,
+        color = if (text == null) Nocturne.colors.neutral.s500 else color,
+        modifier = Modifier.width(52.dp),
+        textAlign = TextAlign.End,
+    )
 }

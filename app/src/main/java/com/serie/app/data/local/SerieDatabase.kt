@@ -17,8 +17,10 @@ import androidx.room.RoomDatabase
         SessionEntity::class,
         SessionSetEntity::class,
         BodyWeightEntity::class,
+        MeasureTypeEntity::class,
+        BodyMeasureEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class SerieDatabase : RoomDatabase() {
@@ -30,6 +32,7 @@ abstract class SerieDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
     abstract fun sessionDao(): SessionDao
     abstract fun bodyWeightDao(): BodyWeightDao
+    abstract fun measureDao(): MeasureDao
 
     companion object {
         private const val NAME = "serie.db"

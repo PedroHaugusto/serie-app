@@ -432,6 +432,31 @@ object Stats {
     private fun monthOf(session: CompletedSession): String =
         DateFormat.monthYear(session.date).substringBefore(" de")
 
+    // ------------------------------------------------------- medidas do corpo
+
+    /**
+     * Monta a tabela de medidas: por medida, a ultima medicao e a anterior.
+     *
+     * As medidas sem medicao nenhuma continuam na lista, com tracos. Some-las
+     * esconderia justamente o que falta medir.
+     */
+    fun measureRows(types: List<MeasureType>, entries: List<MeasureEntry>): List<MeasureRow> {
+        val byType = entries.groupBy { it.typeId }
+        return types.map { type ->
+            val sorted = byType[type.id].orEmpty().sortedByDescending { it.atMillis }
+            MeasureRow(
+                type = type,
+                latest = sorted.getOrNull(0),
+                previous = sorted.getOrNull(1),
+            )
+        }
+    }
+
+    /** Centimetros com uma casa, sem a casa quando ela e zero. */
+    fun formatCm(cm: Double): String =
+        if (cm % 1.0 == 0.0) "${cm.roundToInt()}"
+        else "%.1f".format(cm).replace('.', ',')
+
     fun formatKg(kg: Double): String =
         if (kg % 1.0 == 0.0) "${kg.roundToInt()} kg"
         else "%.1f kg".format(kg).replace('.', ',')
