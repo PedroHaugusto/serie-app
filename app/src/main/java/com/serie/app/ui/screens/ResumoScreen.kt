@@ -19,6 +19,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.serie.app.ui.SerieUiState
 import com.serie.app.ui.SerieViewModel
+import com.serie.app.domain.agree
+import com.serie.app.domain.Num
 import com.serie.app.ui.components.ListRow
 import com.serie.app.ui.components.Ph
 import com.serie.app.ui.components.PhIcon
@@ -73,13 +75,17 @@ fun ResumoScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     SummaryStat(summary.durationLabel, "duração", Modifier.weight(1f))
                     SummaryStat(
-                        "${"%,d".format(summary.volumeKg).replace(',', '.')} kg",
+                        Num.integer(summary.volumeKg) + " kg",
                         summary.volumeDelta,
                         Modifier.weight(1f),
                     )
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    SummaryStat("${summary.totalSets}", "séries", Modifier.weight(1f))
+                    SummaryStat(
+                        "${summary.totalSets}",
+                        agree(summary.totalSets, "série"),
+                        Modifier.weight(1f),
+                    )
                     SummaryStat("${summary.records.size}", "recordes", Modifier.weight(1f))
                 }
             }

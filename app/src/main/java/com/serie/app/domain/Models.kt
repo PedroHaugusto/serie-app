@@ -353,15 +353,45 @@ data class UserProfile(
     val initial: String get() = name.trim().firstOrNull()?.uppercase() ?: "?"
 }
 
-/** Preferencias do usuario, todas editaveis na tela de perfil. */
+/**
+ * Preferencias do usuario, todas editaveis na tela de perfil.
+ *
+ * Nao guarda mais meta semanal nem unidade. A meta era lida por ninguem - a
+ * tela Hoje conta dias agendados de proposito - e a unidade gravava uma
+ * escolha que nenhum numero do app respeitava.
+ */
 @Immutable
 data class Preferences(
-    val weeklyGoal: Int,
-    val useKilograms: Boolean,
     val darkTheme: Boolean,
     val remindersOn: Boolean,
-    val reminderLabel: String,
-)
+    /** Dias do lembrete, de segunda a domingo. */
+    val reminderDays: List<Boolean>,
+    val reminderHour: Int,
+    val reminderMinute: Int,
+) {
+    /** "18:00" */
+    val timeLabel: String get() = "%02d:%02d".format(reminderHour, reminderMinute)
+
+    /**
+     * Sem dia escolhido nao ha lembrete, mesmo com o interruptor ligado: um
+     * alarme sem data nunca dispararia, e deixar o interruptor afirmando que
+     * dispara seria a mentira que esta tela tinha antes.
+     */
+    val reminderActive: Boolean get() = remindersOn && reminderDays.any { it }
+
+    /** "Seg, Qua, Sex · 18:00" */
+    val reminderLabel: String
+        get() {
+            val days = reminderDays.mapIndexedNotNull { i, on ->
+                if (on) DateFormat.WEEKDAY_SHORT[i] else null
+            }
+            return when {
+                days.isEmpty() -> "Escolha os dias"
+                days.size == 7 -> "Todos os dias · $timeLabel"
+                else -> days.joinToString(", ") + " · " + timeLabel
+            }
+        }
+}
 
 /** Estado de carregamento de uma tela de lista. */
 enum class LoadState { Content, Empty, Loading, Error }

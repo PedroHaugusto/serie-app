@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.serie.app.domain.DateFormat
 import com.serie.app.domain.MeasureRow
+import com.serie.app.domain.plural
 import com.serie.app.domain.Stats
 import com.serie.app.ui.SerieUiState
 import com.serie.app.ui.SerieViewModel
@@ -90,7 +91,7 @@ fun CorpoScreen(
                             color = c.accent,
                         )
                         Text(
-                            change?.let { (_, days) -> "em $days dias" }
+                            change?.let { (_, days) -> "em " + plural(days.toInt(), "dia") }
                                 ?: if (latest == null) "toque em Pesar" else "primeira pesagem",
                             style = Nocturne.type.caption,
                             color = c.textMuted,

@@ -456,17 +456,19 @@ private fun SetEntry.toEntity(position: Int) = ActiveSetEntity(
 )
 
 private fun PreferencesEntity.toDomain() = Preferences(
-    weeklyGoal = weeklyGoal,
-    useKilograms = useKilograms,
     darkTheme = darkTheme,
     remindersOn = remindersOn,
-    reminderLabel = reminderLabel,
+    reminderDays = List(7) { reminderDays and (1 shl it) != 0 },
+    reminderHour = reminderHour,
+    reminderMinute = reminderMinute,
 )
 
 private fun Preferences.toEntity() = PreferencesEntity(
-    weeklyGoal = weeklyGoal,
-    useKilograms = useKilograms,
     darkTheme = darkTheme,
     remindersOn = remindersOn,
-    reminderLabel = reminderLabel,
+    reminderDays = reminderDays.foldIndexed(0) { i, mask, on ->
+        if (on) mask or (1 shl i) else mask
+    },
+    reminderHour = reminderHour,
+    reminderMinute = reminderMinute,
 )

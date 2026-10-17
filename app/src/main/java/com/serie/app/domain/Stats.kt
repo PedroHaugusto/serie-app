@@ -132,7 +132,7 @@ object Stats {
     }
 
     /** "78,4" - peso sem a unidade, que a tela escreve a parte. */
-    fun formatWeight(kg: Double): String = "%.1f".format(kg).replace('.', ',')
+    fun formatWeight(kg: Double): String = Num.decimal(kg)
 
     /**
      * Variacao de peso dentro de uma janela de dias.
@@ -311,9 +311,9 @@ object Stats {
 
     /** "18,4 t" acima de mil quilos, "840 kg" abaixo. */
     fun formatVolume(kg: Double): String = if (kg >= 1000) {
-        "%.1f t".format(kg / 1000).replace('.', ',')
+        Num.decimal(kg / 1000) + " t"
     } else {
-        "${kg.roundToInt()} kg"
+        Num.integer(kg) + " kg"
     }
 
     /** Volume dos ultimos 30 dias contra os 30 anteriores. */
@@ -328,6 +328,9 @@ object Stats {
         val pct = ((thisMonth - lastMonth) / lastMonth * 100).roundToInt()
         return "${if (pct >= 0) "+" else ""}$pct%"
     }
+
+    /** Quantas series o historico inteiro registrou. */
+    fun totalSets(history: List<CompletedSession>): Int = history.sumOf { it.totalSets }
 
     /** O recorde mais recente, para o card da tela Hoje. */
     fun lastRecord(history: List<CompletedSession>): PersonalRecord? {
@@ -346,7 +349,7 @@ object Stats {
         val weeks = (ChronoUnit.DAYS.between(first, today) + 1) / 7.0
         if (weeks < 1.0) return "treinos · primeira semana"
         val rate = history.size / weeks
-        return "treinos · %.1f por semana".format(rate).replace('.', ',')
+        return "treinos · ${Num.decimal(rate)} por semana"
     }
 
     /**
@@ -410,7 +413,7 @@ object Stats {
                 val last = points.last()
                 ExerciseProgress(
                     name = name,
-                    estimated1RM = "${max.roundToInt()} kg",
+                    estimated1RM = Num.integer(max) + " kg",
                     from = "${formatKg(first.second.loadKg)} em ${monthOf(first.first)}",
                     to = "${formatKg(last.second.loadKg)} em ${monthOf(last.first)}",
                     // Normaliza entre o menor e o maior para a linha usar a
@@ -453,13 +456,9 @@ object Stats {
     }
 
     /** Centimetros com uma casa, sem a casa quando ela e zero. */
-    fun formatCm(cm: Double): String =
-        if (cm % 1.0 == 0.0) "${cm.roundToInt()}"
-        else "%.1f".format(cm).replace('.', ',')
+    fun formatCm(cm: Double): String = Num.trimmed(cm)
 
-    fun formatKg(kg: Double): String =
-        if (kg % 1.0 == 0.0) "${kg.roundToInt()} kg"
-        else "%.1f kg".format(kg).replace('.', ',')
+    fun formatKg(kg: Double): String = Num.trimmed(kg) + " kg"
 
     /**
      * Recordes batidos numa sessao.

@@ -26,6 +26,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.serie.app.domain.DateFormat
+import com.serie.app.domain.agree
+import com.serie.app.domain.plural
 import com.serie.app.domain.Stats
 import com.serie.app.domain.ExerciseProgress
 import com.serie.app.ui.SerieUiState
@@ -256,7 +258,8 @@ fun EvolucaoScreen(
                 Column {
                     Text("Histórico", style = Nocturne.type.itemTitle, color = c.text)
                     Text(
-                        "${state.history.size} treinos registrados",
+                        plural(state.history.size, "treino") + " " +
+                            agree(state.history.size, "registrado"),
                         style = Nocturne.type.caption,
                         color = c.textMuted,
                     )

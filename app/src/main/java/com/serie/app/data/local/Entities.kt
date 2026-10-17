@@ -82,11 +82,13 @@ data class LibraryExerciseEntity(
 @Entity(tableName = "preferences")
 data class PreferencesEntity(
     @PrimaryKey val id: Int = SINGLE_ROW,
-    val weeklyGoal: Int,
-    val useKilograms: Boolean,
     val darkTheme: Boolean,
     val remindersOn: Boolean,
-    val reminderLabel: String,
+    /** Mascara de bits dos dias, bit 0 = segunda. Sete colunas resolveriam o
+     *  mesmo, mas renomear "terca" nunca aconteceria e a leitura e so aqui. */
+    val reminderDays: Int,
+    val reminderHour: Int,
+    val reminderMinute: Int,
 ) {
     companion object {
         const val SINGLE_ROW = 1

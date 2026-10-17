@@ -114,6 +114,8 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             bodyWeights = db.bodyWeights,
             recordingWeight = ui.recordingWeight,
             measureRows = Stats.measureRows(db.measureTypes, db.measureEntries),
+            measureTypes = db.measureTypes,
+            measureEntries = db.measureEntries,
             editingMeasures = ui.editingMeasures,
             creatingMeasure = ui.creatingMeasure,
             streak = Stats.streakDays(history, today),
@@ -122,6 +124,7 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             monthDelta = Stats.monthDelta(history, today),
             lastRecord = Stats.lastRecord(history),
             totalWorkouts = Stats.totalWorkouts(history),
+            totalSets = Stats.totalSets(history),
             totalRecords = Stats.totalRecords(history),
             volumeChart = Stats.volumeChart(history, ui.period, today),
             muscleVolumes = Stats.muscleVolumes(history),
@@ -132,6 +135,7 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
             preferences = db.preferences,
             profile = db.profile,
             editingProfile = ui.editingProfile,
+            editingReminderTime = ui.editingReminderTime,
             // A sessao guardada so vira numero de cronometro aqui, resolvida
             // contra o tique atual.
             active = db.session?.toView(ui.nowMillis),
@@ -816,13 +820,30 @@ class SerieViewModel(private val repository: SerieRepository) : ViewModel() {
 
     // ------------------------------------------------------------ preferencias
 
-    fun setWeeklyGoal(index: Int) = updatePrefs { it.copy(weeklyGoal = index + 3) }
-
-    fun setUnit(index: Int) = updatePrefs { it.copy(useKilograms = index == 0) }
-
     fun setDarkTheme(dark: Boolean) = updatePrefs { it.copy(darkTheme = dark) }
 
-    fun toggleReminders() = updatePrefs { it.copy(remindersOn = !it.remindersOn) }
+    fun setReminders(on: Boolean) = updatePrefs { it.copy(remindersOn = on) }
+
+    /**
+     * Liga um dia do lembrete.
+     *
+     * Marcar um dia liga o lembrete junto: quem acabou de escolher "quarta"
+     * quer ser avisado na quarta, e deixar o interruptor desligado faria o
+     * toque nao produzir efeito nenhum.
+     */
+    fun toggleReminderDay(index: Int) = updatePrefs { prefs ->
+        val days = prefs.reminderDays.mapIndexed { i, on -> if (i == index) !on else on }
+        prefs.copy(reminderDays = days, remindersOn = prefs.remindersOn || days.any { it })
+    }
+
+    fun openReminderTime() = transient.update { it.copy(editingReminderTime = true) }
+
+    fun dismissReminderTime() = transient.update { it.copy(editingReminderTime = false) }
+
+    fun setReminderTime(hour: Int, minute: Int) {
+        transient.update { it.copy(editingReminderTime = false) }
+        updatePrefs { it.copy(reminderHour = hour, reminderMinute = minute) }
+    }
 
     /**
      * Preferencia nao tem botao de salvar: cada toque grava.
@@ -899,6 +920,7 @@ private data class TransientState(
     val editingMeasures: Boolean = false,
     val creatingMeasure: Boolean = false,
     val editingProfile: Boolean = false,
+    val editingReminderTime: Boolean = false,
     val summary: WorkoutSummary? = null,
     val effort: Int = 1,
     val period: Int = 1,
@@ -929,6 +951,7 @@ data class SerieUiState(
     val preferences: Preferences = SeedData.preferences,
     val profile: UserProfile = SeedData.profile,
     val editingProfile: Boolean = false,
+    val editingReminderTime: Boolean = false,
     // ---- derivados do historico ----
     val today: LocalDate = LocalDate.now(),
     val todayLabel: String = "",
@@ -937,6 +960,8 @@ data class SerieUiState(
     val todaySessions: List<CompletedSession> = emptyList(),
     val bodyWeights: List<BodyWeight> = emptyList(),
     val measureRows: List<MeasureRow> = emptyList(),
+    val measureTypes: List<MeasureType> = emptyList(),
+    val measureEntries: List<MeasureEntry> = emptyList(),
     val recordingWeight: Boolean = false,
     val editingMeasures: Boolean = false,
     val creatingMeasure: Boolean = false,
@@ -946,6 +971,7 @@ data class SerieUiState(
     val monthDelta: String = "-",
     val lastRecord: PersonalRecord? = null,
     val totalWorkouts: Int = 0,
+    val totalSets: Int = 0,
     val totalRecords: Int = 0,
     val volumeChart: EvolutionPeriod? = null,
     val muscleVolumes: List<MuscleVolume> = emptyList(),

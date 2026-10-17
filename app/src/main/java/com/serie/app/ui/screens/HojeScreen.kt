@@ -30,6 +30,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.serie.app.domain.DayState
+import com.serie.app.domain.agree
+import com.serie.app.domain.plural
 import com.serie.app.domain.Stats
 import com.serie.app.domain.WeekDay
 import com.serie.app.domain.Workout
@@ -64,9 +66,6 @@ private const val PREVIEW_COUNT = 3
  * Todas as palavras contadas nesta tela terminam em vogal, entao o plural e
  * sempre um "s" no fim - nao vale a pena uma tabela para isso.
  */
-private fun plural(count: Int, singular: String): String =
-    "$count $singular" + if (count == 1) "" else "s"
-
 /** 02 · Hoje - a tela que abre o app depois do login. */
 @Composable
 fun HojeScreen(
@@ -379,7 +378,7 @@ private fun WeekSection(state: SerieUiState) {
             trailing = if (scheduled > 0) {
                 "$trained de " + plural(scheduled, "dia")
             } else {
-                plural(trained, "dia") + " treinado" + if (trained == 1) "" else "s"
+                plural(trained, "dia") + " " + agree(trained, "treinado")
             },
         )
         ProgressTrack(fraction)

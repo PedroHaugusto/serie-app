@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.serie.app.domain.CompletedSession
 import com.serie.app.domain.DateFormat
+import com.serie.app.domain.agree
+import com.serie.app.domain.plural
 import com.serie.app.domain.Stats
 import com.serie.app.ui.SerieUiState
 import com.serie.app.ui.SerieViewModel
@@ -74,9 +76,9 @@ fun HistoricoScreen(
         } else {
             item {
                 Text(
-                    "${state.history.size} treinos · ${Stats.formatVolume(
-                        state.history.sumOf { it.volumeKg }
-                    )} no total",
+                    plural(state.history.size, "treino") + " · " +
+                        Stats.formatVolume(state.history.sumOf { it.volumeKg }) +
+                        " no total",
                     style = Nocturne.type.caption,
                     color = c.textMuted,
                     modifier = Modifier.padding(bottom = 4.dp),
@@ -123,7 +125,8 @@ private fun SessionRow(session: CompletedSession, onDelete: () -> Unit) {
                 color = c.textMuted,
             )
             Text(
-                "${session.totalSets} séries · ${Stats.formatVolume(session.volumeKg)} · " +
+                plural(session.totalSets, "série") + " · " +
+                    Stats.formatVolume(session.volumeKg) + " · " +
                     formatClock(session.durationSeconds),
                 style = Nocturne.type.caption,
                 color = c.textSecondary,
@@ -159,8 +162,10 @@ private fun ConfirmDeleteDialog(
             Text("Apagar este treino?", style = Nocturne.type.h2, color = c.text)
             Text(
                 "${session.workoutName} · ${DateFormat.shortDate(session.date)}\n" +
-                    "As ${session.totalSets} séries registradas somem, e sequência, " +
-                    "volume e recordes serão recalculados.",
+                    plural(session.totalSets, "série") + " " +
+                    agree(session.totalSets, "registrada") +
+                    (if (session.totalSets == 1) " some" else " somem") +
+                    ", e sequência, volume e recordes serão recalculados.",
                 style = Nocturne.type.bodySmall,
                 color = c.textSecondary,
             )

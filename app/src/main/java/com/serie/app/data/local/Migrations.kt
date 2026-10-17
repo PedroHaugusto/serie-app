@@ -222,7 +222,45 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+/**
+ * Preferencias: saem meta semanal, unidade e o rotulo fixo do lembrete;
+ * entram os dias e a hora do lembrete.
+ *
+ * A tabela e recriada em vez de alterada coluna por coluna porque tres saem e
+ * tres entram - um ALTER por vez deixaria o esquema divergindo do exportado no
+ * meio do caminho.
+ *
+ * [remindersOn] volta para desligado de proposito. O interruptor antigo
+ * gravava a escolha e nao agendava nada; manter "ligado" faria o app afirmar
+ * que ha um lembrete marcado para um horario que nunca existiu.
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // A antiga sai do caminho primeiro para que a nova nasca com o nome
+        // definitivo. Criar com nome provisorio e renomear depois faria o
+        // SQLite guardar o DDL reescrito por ele, e nao o texto exportado.
+        db.execSQL("ALTER TABLE `preferences` RENAME TO `preferences_antiga`")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `preferences` (" +
+                "`id` INTEGER NOT NULL, " +
+                "`darkTheme` INTEGER NOT NULL, " +
+                "`remindersOn` INTEGER NOT NULL, " +
+                "`reminderDays` INTEGER NOT NULL, " +
+                "`reminderHour` INTEGER NOT NULL, " +
+                "`reminderMinute` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`id`))"
+        )
+        db.execSQL(
+            "INSERT INTO `preferences` " +
+                "(`id`, `darkTheme`, `remindersOn`, `reminderDays`, " +
+                "`reminderHour`, `reminderMinute`) " +
+                "SELECT `id`, `darkTheme`, 0, 0, 18, 0 FROM `preferences_antiga`"
+        )
+        db.execSQL("DROP TABLE `preferences_antiga`")
+    }
+}
+
 val ALL_MIGRATIONS = arrayOf(
     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-    MIGRATION_6_7, MIGRATION_7_8,
+    MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
 )

@@ -22,6 +22,9 @@ object DateFormat {
     /** Iniciais da faixa da semana, de segunda a domingo. */
     val WEEKDAY_INITIALS = listOf("S", "T", "Q", "Q", "S", "S", "D")
 
+    /** "Seg", "Ter"... para listar os dias do lembrete. */
+    val WEEKDAY_SHORT = listOf("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
+
     private val MONTHS = listOf(
         "janeiro", "fevereiro", "março", "abril", "maio", "junho",
         "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
@@ -45,6 +48,10 @@ object DateFormat {
         val month = MONTHS_SHORT[date.monthValue - 1]
         return "$weekday, ${date.dayOfMonth} $month"
     }
+
+    /** "17/10/2026" - o formato que uma planilha brasileira entende. */
+    fun numericDate(date: LocalDate): String =
+        "%02d/%02d/%04d".format(date.dayOfMonth, date.monthValue, date.year)
 
     /** "março de 2026" - o campo "treinando desde" do perfil. */
     fun monthYear(date: LocalDate): String =

@@ -121,11 +121,14 @@ object SeedData {
     )
 
     val preferences = Preferences(
-        weeklyGoal = 5,
-        useKilograms = true,
         darkTheme = true,
-        remindersOn = true,
-        reminderLabel = "Seg, Qua, Sex · 18:00",
+        // O lembrete comeca desligado: ligar depende de permissao de
+        // notificacao, e o app nao tem como pedi-la antes de o usuario abrir
+        // a tela de perfil.
+        remindersOn = false,
+        reminderDays = List(7) { false },
+        reminderHour = 18,
+        reminderMinute = 0,
     )
 
 }
